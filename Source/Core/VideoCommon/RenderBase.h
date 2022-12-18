@@ -30,6 +30,7 @@
 #include "VideoCommon/BPMemory.h"
 #include "VideoCommon/FPSCounter.h"
 #include "VideoCommon/FrameDump.h"
+#include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModManager.h"
 #include "VideoCommon/RenderState.h"
 #include "VideoCommon/TextureConfig.h"
 
@@ -112,8 +113,8 @@ public:
   virtual void DrawIndexed(u32 base_index, u32 num_indices, u32 base_vertex) {}
 
   // Dispatching compute shaders with currently-bound state.
-  virtual void DispatchComputeShader(const AbstractShader* shader, u32 groups_x, u32 groups_y,
-                                     u32 groups_z)
+  virtual void DispatchComputeShader(const AbstractShader* shader, u32 groupsize_x, u32 groupsize_y,
+                                     u32 groupsize_z, u32 groups_x, u32 groups_y, u32 groups_z)
   {
   }
 
@@ -268,6 +269,8 @@ public:
   // Will forcibly reload all textures on the next swap
   void ForceReloadTextures();
 
+  const GraphicsModManager& GetGraphicsModManager() const;
+
 protected:
   // Bitmask containing information about which configuration has changed for the backend.
   enum ConfigChangeBits : u32
@@ -299,6 +302,9 @@ protected:
   // Sets up ImGui state for the next frame.
   // This function itself acquires the ImGui lock, so it should not be held.
   void BeginImGuiFrame();
+
+  // Same as above but without locking the ImGui lock.
+  void BeginImGuiFrameUnlocked();
 
   // Destroys all ImGui GPU resources, must do before shutdown.
   void ShutdownImGui();
@@ -332,7 +338,8 @@ protected:
   MathUtil::Rectangle<int> m_target_rectangle = {};
   int m_frame_count = 0;
 
-  FPSCounter m_fps_counter;
+  FPSCounter m_fps_counter = FPSCounter("render_times.txt");
+  FPSCounter m_vps_counter = FPSCounter("v_blank_times.txt");
 
   std::unique_ptr<VideoCommon::PostProcessing> m_post_processor;
 
@@ -447,6 +454,8 @@ private:
   std::unique_ptr<NetPlayChatUI> m_netplay_chat_ui;
 
   Common::Flag m_force_reload_textures;
+
+  GraphicsModManager m_graphics_mod_manager;
 };
 
 extern std::unique_ptr<Renderer> g_renderer;

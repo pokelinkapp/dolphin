@@ -7,7 +7,6 @@
 #include <cmath>
 #include <memory>
 
-#include "Common/BitSet.h"
 #include "Common/ChunkFile.h"
 #include "Common/CommonTypes.h"
 #include "Common/EnumMap.h"
@@ -22,6 +21,7 @@
 #include "VideoCommon/DataReader.h"
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/GeometryShaderManager.h"
+#include "VideoCommon/GraphicsModSystem/Runtime/GraphicsModActionData.h"
 #include "VideoCommon/IndexGenerator.h"
 #include "VideoCommon/NativeVertexFormat.h"
 #include "VideoCommon/OpcodeDecoding.h"
@@ -30,6 +30,7 @@
 #include "VideoCommon/RenderBase.h"
 #include "VideoCommon/Statistics.h"
 #include "VideoCommon/TextureCacheBase.h"
+#include "VideoCommon/TextureInfo.h"
 #include "VideoCommon/VertexLoaderManager.h"
 #include "VideoCommon/VertexShaderManager.h"
 #include "VideoCommon/VideoBackendBase.h"
@@ -139,12 +140,12 @@ DataReader VertexManagerBase::PrepareForAdditionalData(OpcodeDecoder::Primitive 
 
   // Check for size in buffer, if the buffer gets full, call Flush()
   if (!m_is_flushed &&
-      (count > m_index_generator.GetRemainingIndices() || count > GetRemainingIndices(primitive) ||
-       needed_vertex_bytes > GetRemainingSize()))
+      (count > m_index_generator.GetRemainingIndices(primitive) ||
+       count > GetRemainingIndices(primitive) || needed_vertex_bytes > GetRemainingSize()))
   {
     Flush();
 
-    if (count > m_index_generator.GetRemainingIndices())
+    if (count > m_index_generator.GetRemainingIndices(primitive))
     {
       ERROR_LOG_FMT(VIDEO, "Too little remaining index values. Use 32-bit or reset them on flush.");
     }
@@ -192,7 +193,55 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
 {
   const u32 index_len = MAXIBUFFERSIZE - m_index_generator.GetIndexLen();
 
-  if (g_Config.backend_info.bSupportsPrimitiveRestart)
+  if (primitive >= Primitive::GX_DRAW_LINES)
+  {
+    if (g_Config.UseVSForLinePointExpand())
+    {
+      if (g_Config.backend_info.bSupportsPrimitiveRestart)
+      {
+        switch (primitive)
+        {
+        case Primitive::GX_DRAW_LINES:
+          return index_len / 5 * 2;
+        case Primitive::GX_DRAW_LINE_STRIP:
+          return index_len / 5 + 1;
+        case Primitive::GX_DRAW_POINTS:
+          return index_len / 5;
+        default:
+          return 0;
+        }
+      }
+      else
+      {
+        switch (primitive)
+        {
+        case Primitive::GX_DRAW_LINES:
+          return index_len / 6 * 2;
+        case Primitive::GX_DRAW_LINE_STRIP:
+          return index_len / 6 + 1;
+        case Primitive::GX_DRAW_POINTS:
+          return index_len / 6;
+        default:
+          return 0;
+        }
+      }
+    }
+    else
+    {
+      switch (primitive)
+      {
+      case Primitive::GX_DRAW_LINES:
+        return index_len;
+      case Primitive::GX_DRAW_LINE_STRIP:
+        return index_len / 2 + 1;
+      case Primitive::GX_DRAW_POINTS:
+        return index_len;
+      default:
+        return 0;
+      }
+    }
+  }
+  else if (g_Config.backend_info.bSupportsPrimitiveRestart)
   {
     switch (primitive)
     {
@@ -205,15 +254,6 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
       return index_len / 1 - 1;
     case Primitive::GX_DRAW_TRIANGLE_FAN:
       return index_len / 6 * 4 + 1;
-
-    case Primitive::GX_DRAW_LINES:
-      return index_len;
-    case Primitive::GX_DRAW_LINE_STRIP:
-      return index_len / 2 + 1;
-
-    case Primitive::GX_DRAW_POINTS:
-      return index_len;
-
     default:
       return 0;
     }
@@ -231,15 +271,6 @@ u32 VertexManagerBase::GetRemainingIndices(OpcodeDecoder::Primitive primitive) c
       return index_len / 3 + 2;
     case Primitive::GX_DRAW_TRIANGLE_FAN:
       return index_len / 3 + 2;
-
-    case Primitive::GX_DRAW_LINES:
-      return index_len;
-    case Primitive::GX_DRAW_LINE_STRIP:
-      return index_len / 2 + 1;
-
-    case Primitive::GX_DRAW_POINTS:
-      return index_len;
-
     default:
       return 0;
     }
@@ -337,7 +368,7 @@ bool VertexManagerBase::UploadTexelBuffer(const void* data, u32 data_size, Texel
   return false;
 }
 
-void VertexManagerBase::LoadTextures()
+BitSet32 VertexManagerBase::UsedTextures() const
 {
   BitSet32 usedtextures;
   for (u32 i = 0; i < bpmem.genMode.numtevstages + 1u; ++i)
@@ -349,10 +380,7 @@ void VertexManagerBase::LoadTextures()
       if (bpmem.tevind[i].IsActive() && bpmem.tevind[i].bt < bpmem.genMode.numindstages)
         usedtextures[bpmem.tevindref.getTexMap(bpmem.tevind[i].bt)] = true;
 
-  for (unsigned int i : usedtextures)
-    g_texture_cache->Load(i);
-
-  g_texture_cache->BindTextures(usedtextures);
+  return usedtextures;
 }
 
 void VertexManagerBase::Flush()
@@ -455,7 +483,30 @@ void VertexManagerBase::Flush()
 
   CalculateBinormals(VertexLoaderManager::GetCurrentVertexFormat());
   // Calculate ZSlope for zfreeze
-  VertexShaderManager::SetConstants();
+  const auto used_textures = UsedTextures();
+  std::vector<std::string> texture_names;
+  if (!m_cull_all)
+  {
+    if (!g_ActiveConfig.bGraphicMods)
+    {
+      for (const u32 i : used_textures)
+      {
+        g_texture_cache->Load(TextureInfo::FromStage(i));
+      }
+    }
+    else
+    {
+      for (const u32 i : used_textures)
+      {
+        const auto cache_entry = g_texture_cache->Load(TextureInfo::FromStage(i));
+        if (cache_entry)
+        {
+          texture_names.push_back(cache_entry->texture_info_name);
+        }
+      }
+    }
+  }
+  VertexShaderManager::SetConstants(texture_names);
   if (!bpmem.genMode.zfreeze)
   {
     // Must be done after VertexShaderManager::SetConstants()
@@ -469,6 +520,19 @@ void VertexManagerBase::Flush()
 
   if (!m_cull_all)
   {
+    for (const auto& texture_name : texture_names)
+    {
+      bool skip = false;
+      GraphicsModActionData::DrawStarted draw_started{&skip};
+      for (const auto action :
+           g_renderer->GetGraphicsModManager().GetDrawStartedActions(texture_name))
+      {
+        action->OnDrawStarted(&draw_started);
+      }
+      if (skip == true)
+        return;
+    }
+
     // Now the vertices can be flushed to the GPU. Everything following the CommitBuffer() call
     // must be careful to not upload any utility vertices, as the binding will be lost otherwise.
     const u32 num_indices = m_index_generator.GetIndexLen();
@@ -477,13 +541,24 @@ void VertexManagerBase::Flush()
                  VertexLoaderManager::GetCurrentVertexFormat()->GetVertexStride(), num_indices,
                  &base_vertex, &base_index);
 
+    if (g_ActiveConfig.backend_info.api_type != APIType::D3D &&
+        g_ActiveConfig.UseVSForLinePointExpand() &&
+        (m_current_primitive_type == PrimitiveType::Points ||
+         m_current_primitive_type == PrimitiveType::Lines))
+    {
+      // VS point/line expansion puts the vertex id at gl_VertexID << 2
+      // That means the base vertex has to be adjusted to match
+      // (The shader adds this after shifting right on D3D, so no need to do this)
+      base_vertex <<= 2;
+    }
+
     // Texture loading can cause palettes to be applied (-> uniforms -> draws).
     // Palette application does not use vertices, only a full-screen quad, so this is okay.
     // Same with GPU texture decoding, which uses compute shaders.
-    LoadTextures();
+    g_texture_cache->BindTextures(used_textures);
 
     // Now we can upload uniforms, as nothing else will override them.
-    GeometryShaderManager::SetConstants();
+    GeometryShaderManager::SetConstants(m_current_primitive_type);
     PixelShaderManager::SetConstants();
     UploadUniforms();
 
@@ -523,13 +598,11 @@ void VertexManagerBase::DoState(PointerWrap& p)
   {
     // Flush old vertex data before loading state.
     Flush();
-
-    // Clear all caches that touch RAM
-    // (? these don't appear to touch any emulation state that gets saved. moved to on load only.)
-    VertexLoaderManager::MarkAllDirty();
   }
 
   p.Do(m_zslope);
+  p.Do(VertexLoaderManager::tangent_cache);
+  p.Do(VertexLoaderManager::binormal_cache);
 }
 
 void VertexManagerBase::CalculateZSlope(NativeVertexFormat* format)
@@ -753,9 +826,25 @@ void VertexManagerBase::UpdatePipelineObject()
   }
 }
 
+void VertexManagerBase::OnConfigChange()
+{
+  // Reload index generator function tables in case VS expand config changed
+  m_index_generator.Init();
+}
+
 void VertexManagerBase::OnDraw()
 {
   m_draw_counter++;
+
+  // If the last efb copy was too close to the one before it, don't forget about it until the next
+  // efb copy happens (which might not be for a long time)
+  u32 diff = m_draw_counter - m_last_efb_copy_draw_counter;
+  if (m_unflushed_efb_copy && diff > MINIMUM_DRAW_CALLS_PER_COMMAND_BUFFER_FOR_READBACK)
+  {
+    g_renderer->Flush();
+    m_unflushed_efb_copy = false;
+    m_last_efb_copy_draw_counter = m_draw_counter;
+  }
 
   // If we didn't have any CPU access last frame, do nothing.
   if (m_scheduled_command_buffer_kicks.empty() || !m_allow_background_execution)
@@ -768,6 +857,8 @@ void VertexManagerBase::OnDraw()
   {
     // Kick a command buffer on the background thread.
     g_renderer->Flush();
+    m_unflushed_efb_copy = false;
+    m_last_efb_copy_draw_counter = m_draw_counter;
   }
 }
 
@@ -794,8 +885,12 @@ void VertexManagerBase::OnEFBCopyToRAM()
   const u32 diff = m_draw_counter - m_last_efb_copy_draw_counter;
   m_last_efb_copy_draw_counter = m_draw_counter;
   if (diff < MINIMUM_DRAW_CALLS_PER_COMMAND_BUFFER_FOR_READBACK)
+  {
+    m_unflushed_efb_copy = true;
     return;
+  }
 
+  m_unflushed_efb_copy = false;
   g_renderer->Flush();
 }
 

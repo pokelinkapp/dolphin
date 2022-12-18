@@ -32,10 +32,15 @@
 #include "Core/IOS/Uids.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
 
 #include "DiscIO/Enums.h"
 #include "DiscIO/RiivolutionPatcher.h"
 #include "DiscIO/VolumeDisc.h"
+
+#include "VideoCommon/VertexManagerBase.h"
+#include "VideoCommon/VertexShaderManager.h"
+#include "VideoCommon/XFMemory.h"
 
 namespace
 {
@@ -61,10 +66,44 @@ void CBoot::RunFunction(u32 address)
 
 void CBoot::SetupMSR()
 {
-  MSR.FP = 1;
+  // 0x0002032
+  MSR.RI = 1;
   MSR.DR = 1;
   MSR.IR = 1;
-  MSR.EE = 1;
+  MSR.FP = 1;
+}
+
+void CBoot::SetupHID(bool is_wii)
+{
+  // HID0 is 0x0011c464 on GC, 0x0011c664 on Wii
+  HID0.BHT = 1;
+  HID0.BTIC = 1;
+  HID0.DCFA = 1;
+  if (is_wii)
+    HID0.SPD = 1;
+  HID0.DCFI = 1;
+  HID0.DCE = 1;
+  // Note that Datel titles will fail to boot if the instruction cache is not enabled; see
+  // https://bugs.dolphin-emu.org/issues/8223
+  HID0.ICE = 1;
+  HID0.NHR = 1;
+  HID0.DPM = 1;
+
+  // HID1 is initialized in PowerPC.cpp to 0x80000000
+  // HID2 is 0xe0000000
+  HID2.PSE = 1;
+  HID2.WPE = 1;
+  HID2.LSQE = 1;
+
+  // HID4 is 0 on GC and 0x83900000 on Wii
+  if (is_wii)
+  {
+    HID4.L2CFI = 1;
+    HID4.LPE = 1;
+    HID4.ST0 = 1;
+    HID4.SBE = 1;
+    HID4.reserved_3 = 1;
+  }
 }
 
 void CBoot::SetupBAT(bool is_wii)
@@ -110,7 +149,7 @@ bool CBoot::RunApploader(bool is_wii, const DiscIO::VolumeDisc& volume,
   // TODO - Make Apploader(or just RunFunction()) debuggable!!!
 
   // Call iAppLoaderEntry.
-  DEBUG_LOG_FMT(MASTER_LOG, "Call iAppLoaderEntry");
+  DEBUG_LOG_FMT(BOOT, "Call iAppLoaderEntry");
   const u32 iAppLoaderFuncAddr = is_wii ? 0x80004000 : 0x80003100;
   PowerPC::ppcState.gpr[3] = iAppLoaderFuncAddr + 0;
   PowerPC::ppcState.gpr[4] = iAppLoaderFuncAddr + 4;
@@ -121,15 +160,16 @@ bool CBoot::RunApploader(bool is_wii, const DiscIO::VolumeDisc& volume,
   const u32 iAppLoaderClose = PowerPC::Read_U32(iAppLoaderFuncAddr + 8);
 
   // iAppLoaderInit
-  DEBUG_LOG_FMT(MASTER_LOG, "Call iAppLoaderInit");
-  HLE::Patch(0x81300000, "AppLoaderReport");  // HLE OSReport for Apploader
+  DEBUG_LOG_FMT(BOOT, "Call iAppLoaderInit");
+  PowerPC::HostWrite_U32(0x4E800020, 0x81300000);  // Write BLR
+  HLE::Patch(0x81300000, "AppLoaderReport");       // HLE OSReport for Apploader
   PowerPC::ppcState.gpr[3] = 0x81300000;
   RunFunction(iAppLoaderInit);
 
   // iAppLoaderMain - Here we load the apploader, the DOL (the exe) and the FST (filesystem).
   // To give you an idea about where the stuff is located on the disc take a look at yagcd
   // ch 13.
-  DEBUG_LOG_FMT(MASTER_LOG, "Call iAppLoaderMain");
+  DEBUG_LOG_FMT(BOOT, "Call iAppLoaderMain");
 
   PowerPC::ppcState.gpr[3] = 0x81300004;
   PowerPC::ppcState.gpr[4] = 0x81300008;
@@ -147,7 +187,7 @@ bool CBoot::RunApploader(bool is_wii, const DiscIO::VolumeDisc& volume,
     const u32 length = PowerPC::Read_U32(0x81300008);
     const u32 dvd_offset = PowerPC::Read_U32(0x8130000c) << (is_wii ? 2 : 0);
 
-    INFO_LOG_FMT(MASTER_LOG, "DVDRead: offset: {:08x}   memOffset: {:08x}   length: {}", dvd_offset,
+    INFO_LOG_FMT(BOOT, "DVDRead: offset: {:08x}   memOffset: {:08x}   length: {}", dvd_offset,
                  ram_address, length);
     DVDRead(volume, dvd_offset, ram_address, length, partition);
 
@@ -161,7 +201,7 @@ bool CBoot::RunApploader(bool is_wii, const DiscIO::VolumeDisc& volume,
   }
 
   // iAppLoaderClose
-  DEBUG_LOG_FMT(MASTER_LOG, "call iAppLoaderClose");
+  DEBUG_LOG_FMT(BOOT, "call iAppLoaderClose");
   RunFunction(iAppLoaderClose);
   HLE::UnPatch("AppLoaderReport");
 
@@ -173,11 +213,14 @@ bool CBoot::RunApploader(bool is_wii, const DiscIO::VolumeDisc& volume,
 
 void CBoot::SetupGCMemory()
 {
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   // Booted from bootrom. 0xE5207C22 = booted from jtag
   PowerPC::HostWrite_U32(0x0D15EA5E, 0x80000020);
 
   // Physical Memory Size (24MB on retail)
-  PowerPC::HostWrite_U32(Memory::GetRamSizeReal(), 0x80000028);
+  PowerPC::HostWrite_U32(memory.GetRamSizeReal(), 0x80000028);
 
   // Console type - DevKit  (retail ID == 0x00000003) see YAGCD 4.2.1.1.2
   // TODO: determine why some games fail when using a retail ID.
@@ -194,7 +237,7 @@ void CBoot::SetupGCMemory()
   PowerPC::HostWrite_U32(0x09a7ec80, 0x800000F8);  // Bus Clock Speed
   PowerPC::HostWrite_U32(0x1cf7c580, 0x800000FC);  // CPU Clock Speed
 
-  PowerPC::HostWrite_U32(0x4c000064, 0x80000300);  // Write default DFI Handler:     rfi
+  PowerPC::HostWrite_U32(0x4c000064, 0x80000300);  // Write default DSI Handler:     rfi
   PowerPC::HostWrite_U32(0x4c000064, 0x80000800);  // Write default FPU Handler:     rfi
   PowerPC::HostWrite_U32(0x4c000064, 0x80000C00);  // Write default Syscall Handler: rfi
 
@@ -214,16 +257,30 @@ bool CBoot::EmulatedBS2_GC(const DiscIO::VolumeDisc& volume,
   INFO_LOG_FMT(BOOT, "Faking GC BS2...");
 
   SetupMSR();
+  SetupHID(/*is_wii*/ false);
   SetupBAT(/*is_wii*/ false);
 
   SetupGCMemory();
 
+  // Datel titles don't initialize the postMatrices, but they have dual-texture coordinate
+  // transformation enabled. We initialize all of xfmem to 0, which results in everything using
+  // a texture coordinate of (0, 0), breaking textures. Normally the IPL will initialize the last
+  // entry to the identity matrix, but the whole point of BS2 EMU is that it skips the IPL, so we
+  // need to do this initialization ourselves.
+  xfmem.postMatrices[0x3d * 4 + 0] = 1.0f;
+  xfmem.postMatrices[0x3e * 4 + 1] = 1.0f;
+  xfmem.postMatrices[0x3f * 4 + 2] = 1.0f;
+  g_vertex_manager->Flush();
+  VertexShaderManager::InvalidateXFRange(XFMEM_POSTMATRICES + 0x3d * 4, XFMEM_POSTMATRICES_END);
+
   DVDReadDiscID(volume, 0x00000000);
 
-  bool streaming = Memory::Read_U8(0x80000008);
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+  bool streaming = memory.Read_U8(0x80000008);
   if (streaming)
   {
-    u8 streaming_size = Memory::Read_U8(0x80000009);
+    u8 streaming_size = memory.Read_U8(0x80000009);
     // If the streaming buffer size is 0, then BS2 uses a default size of 10 instead.
     // No known game uses a size other than the default.
     if (streaming_size == 0)
@@ -361,8 +418,11 @@ bool CBoot::SetupWiiMemory(IOS::HLE::IOSC::ConsoleType console_type)
     return false;
   }
 
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   // Write the 256 byte setting.txt to memory.
-  Memory::CopyToEmu(0x3800, gen.GetBytes().data(), gen.GetBytes().size());
+  memory.CopyToEmu(0x3800, gen.GetBytes().data(), gen.GetBytes().size());
 
   INFO_LOG_FMT(BOOT, "Setup Wii Memory...");
 
@@ -376,28 +436,28 @@ bool CBoot::SetupWiiMemory(IOS::HLE::IOSC::ConsoleType console_type)
   0x80000060  Copyright code
   */
 
-  Memory::Write_U32(0x0D15EA5E, 0x00000020);                // Another magic word
-  Memory::Write_U32(0x00000001, 0x00000024);                // Unknown
-  Memory::Write_U32(Memory::GetRamSizeReal(), 0x00000028);  // MEM1 size 24MB
+  memory.Write_U32(0x0D15EA5E, 0x00000020);               // Another magic word
+  memory.Write_U32(0x00000001, 0x00000024);               // Unknown
+  memory.Write_U32(memory.GetRamSizeReal(), 0x00000028);  // MEM1 size 24MB
   const Core::ConsoleType board_model = console_type == IOS::HLE::IOSC::ConsoleType::RVT ?
                                             Core::ConsoleType::NDEV2_1 :
                                             Core::ConsoleType::RVL_Retail3;
-  Memory::Write_U32(static_cast<u32>(board_model), 0x0000002c);  // Board Model
-  Memory::Write_U32(0x00000000, 0x00000030);                     // Init
-  Memory::Write_U32(0x817FEC60, 0x00000034);                     // Init
+  memory.Write_U32(static_cast<u32>(board_model), 0x0000002c);  // Board Model
+  memory.Write_U32(0x00000000, 0x00000030);                     // Init
+  memory.Write_U32(0x817FEC60, 0x00000034);                     // Init
   // 38, 3C should get start, size of FST through apploader
-  Memory::Write_U32(0x8008f7b8, 0x000000e4);                // Thread Init
-  Memory::Write_U32(Memory::GetRamSizeReal(), 0x000000f0);  // "Simulated memory size" (debug mode?)
-  Memory::Write_U32(0x8179b500, 0x000000f4);                // __start
-  Memory::Write_U32(0x0e7be2c0, 0x000000f8);                // Bus speed
-  Memory::Write_U32(0x2B73A840, 0x000000fc);                // CPU speed
-  Memory::Write_U16(0x0000, 0x000030e6);                    // Console type
-  Memory::Write_U32(0x00000000, 0x000030c0);                // EXI
-  Memory::Write_U32(0x00000000, 0x000030c4);                // EXI
-  Memory::Write_U32(0x00000000, 0x000030dc);                // Time
-  Memory::Write_U32(0xffffffff, 0x000030d8);  // Unknown, set by any official NAND title
-  Memory::Write_U16(0x8201, 0x000030e6);      // Dev console / debug capable
-  Memory::Write_U32(0x00000000, 0x000030f0);  // Apploader
+  memory.Write_U32(0x8008f7b8, 0x000000e4);               // Thread Init
+  memory.Write_U32(memory.GetRamSizeReal(), 0x000000f0);  // "Simulated memory size" (debug mode?)
+  memory.Write_U32(0x8179b500, 0x000000f4);               // __start
+  memory.Write_U32(0x0e7be2c0, 0x000000f8);               // Bus speed
+  memory.Write_U32(0x2B73A840, 0x000000fc);               // CPU speed
+  memory.Write_U16(0x0000, 0x000030e6);                   // Console type
+  memory.Write_U32(0x00000000, 0x000030c0);               // EXI
+  memory.Write_U32(0x00000000, 0x000030c4);               // EXI
+  memory.Write_U32(0x00000000, 0x000030dc);               // Time
+  memory.Write_U32(0xffffffff, 0x000030d8);               // Unknown, set by any official NAND title
+  memory.Write_U16(0x8201, 0x000030e6);                   // Dev console / debug capable
+  memory.Write_U32(0x00000000, 0x000030f0);               // Apploader
 
   // During the boot process, 0x315c is first set to 0xdeadbeef by IOS
   // in the boot_ppc syscall. The value is then partly overwritten by SDK titles.
@@ -406,19 +466,19 @@ bool CBoot::SetupWiiMemory(IOS::HLE::IOSC::ConsoleType console_type)
   //
   // 0x0113 appears to mean v1.13, which is the latest version.
   // It is fine to always use the latest value as apploaders work with all versions.
-  Memory::Write_U16(0x0113, 0x0000315e);
+  memory.Write_U16(0x0113, 0x0000315e);
 
-  Memory::Write_U8(0x80, 0x0000315c);         // OSInit
-  Memory::Write_U16(0x0000, 0x000030e0);      // PADInit
-  Memory::Write_U32(0x80000000, 0x00003184);  // GameID Address
+  memory.Write_U8(0x80, 0x0000315c);         // OSInit
+  memory.Write_U16(0x0000, 0x000030e0);      // PADInit
+  memory.Write_U32(0x80000000, 0x00003184);  // GameID Address
 
   // Fake the VI Init of the IPL
-  Memory::Write_U32(DiscIO::IsNTSC(SConfig::GetInstance().m_region) ? 0 : 1, 0x000000CC);
+  memory.Write_U32(DiscIO::IsNTSC(SConfig::GetInstance().m_region) ? 0 : 1, 0x000000CC);
 
   // Clear exception handler. Why? Don't we begin with only zeros?
   for (int i = 0x3000; i <= 0x3038; i += 4)
   {
-    Memory::Write_U32(0x00000000, i);
+    memory.Write_U32(0x00000000, i);
   }
 
   return true;
@@ -462,6 +522,9 @@ bool CBoot::EmulatedBS2_Wii(const DiscIO::VolumeDisc& volume,
     state->discstate = 0x01;
   });
 
+  auto& system = Core::System::GetInstance();
+  auto& memory = system.GetMemory();
+
   // The system menu clears the RTC flags.
   // However, the system menu also updates the disc cache when this happens; see
   // https://wiibrew.org/wiki/MX23L4005#DI and
@@ -475,8 +538,8 @@ bool CBoot::EmulatedBS2_Wii(const DiscIO::VolumeDisc& volume,
   // When launching the disc game, it copies the partition type and offset to 0x3194
   // and 0x3198 respectively.
   const DiscIO::Partition data_partition = volume.GetGamePartition();
-  Memory::Write_U32(0, 0x3194);
-  Memory::Write_U32(static_cast<u32>(data_partition.offset >> 2), 0x3198);
+  memory.Write_U32(0, 0x3194);
+  memory.Write_U32(static_cast<u32>(data_partition.offset >> 2), 0x3198);
 
   const s32 ios_override = Config::Get(Config::MAIN_OVERRIDE_BOOT_IOS);
   const u64 ios = ios_override >= 0 ? Titles::IOS(static_cast<u32>(ios_override)) : tmd.GetIOSId();
@@ -500,11 +563,12 @@ bool CBoot::EmulatedBS2_Wii(const DiscIO::VolumeDisc& volume,
   DVDRead(volume, 0, 0x3180, 4, partition);
 
   SetupMSR();
+  SetupHID(/*is_wii*/ true);
   SetupBAT(/*is_wii*/ true);
 
-  Memory::Write_U32(0x4c000064, 0x00000300);  // Write default DSI Handler:   rfi
-  Memory::Write_U32(0x4c000064, 0x00000800);  // Write default FPU Handler:   rfi
-  Memory::Write_U32(0x4c000064, 0x00000C00);  // Write default Syscall Handler: rfi
+  memory.Write_U32(0x4c000064, 0x00000300);  // Write default DSI Handler:   rfi
+  memory.Write_U32(0x4c000064, 0x00000800);  // Write default FPU Handler:   rfi
+  memory.Write_U32(0x4c000064, 0x00000C00);  // Write default Syscall Handler: rfi
 
   PowerPC::ppcState.gpr[1] = 0x816ffff0;  // StackPointer
 

@@ -22,6 +22,8 @@
 #include <cmath>
 #include <utility>
 
+#include <fmt/format.h>
+
 #include <QDesktopServices>
 #include <QDir>
 #include <QErrorMessage>
@@ -540,6 +542,8 @@ void GameList::OpenProperties()
   properties->setAttribute(Qt::WA_DeleteOnClose, true);
 
   connect(properties, &PropertiesDialog::OpenGeneralSettings, this, &GameList::OpenGeneralSettings);
+  connect(properties, &PropertiesDialog::OpenGraphicsSettings, this,
+          &GameList::OpenGraphicsSettings);
 
   properties->show();
 }
@@ -712,16 +716,10 @@ void GameList::OpenGCSaveFolder()
     {
     case ExpansionInterface::EXIDeviceType::MemoryCardFolder:
     {
-      std::string path = StringFromFormat("%s/%s/%s", File::GetUserPath(D_GCUSER_IDX).c_str(),
-                                          SConfig::GetDirectoryForRegion(game->GetRegion()),
-                                          slot == Slot::A ? "Card A" : "Card B");
-
       std::string override_path = Config::Get(Config::GetInfoForGCIPathOverride(slot));
-
-      if (!override_path.empty())
-        path = override_path;
-
-      QDir dir(QString::fromStdString(path));
+      QDir dir(QString::fromStdString(override_path.empty() ?
+                                          Config::GetGCIFolderPath(slot, game->GetRegion()) :
+                                          override_path));
 
       if (!dir.entryList({QStringLiteral("%1-%2-*.gci")
                               .arg(QString::fromStdString(game->GetMakerID()))
@@ -734,7 +732,7 @@ void GameList::OpenGCSaveFolder()
     }
     case ExpansionInterface::EXIDeviceType::MemoryCard:
     {
-      std::string memcard_path = Config::Get(Config::GetInfoForMemcardPath(slot));
+      const std::string memcard_path = Config::GetMemcardPath(slot, game->GetRegion());
 
       std::string memcard_dir;
 

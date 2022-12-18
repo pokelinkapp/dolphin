@@ -6,10 +6,10 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
-import android.util.TypedValue;
 
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.core.splashscreen.SplashScreen;
 import androidx.fragment.app.FragmentActivity;
 import androidx.fragment.app.FragmentManager;
 import androidx.leanback.app.BrowseSupportFragment;
@@ -23,6 +23,7 @@ import org.dolphinemu.dolphinemu.R;
 import org.dolphinemu.dolphinemu.activities.EmulationActivity;
 import org.dolphinemu.dolphinemu.adapters.GameRowPresenter;
 import org.dolphinemu.dolphinemu.adapters.SettingsRowPresenter;
+import org.dolphinemu.dolphinemu.databinding.ActivityTvMainBinding;
 import org.dolphinemu.dolphinemu.features.settings.ui.MenuTag;
 import org.dolphinemu.dolphinemu.features.settings.ui.SettingsActivity;
 import org.dolphinemu.dolphinemu.model.GameFile;
@@ -50,11 +51,18 @@ public final class TvMainActivity extends FragmentActivity
 
   private final ArrayList<ArrayObjectAdapter> mGameRows = new ArrayList<>();
 
+  private ActivityTvMainBinding mBinding;
+
   @Override
   protected void onCreate(Bundle savedInstanceState)
   {
+    SplashScreen splashScreen = SplashScreen.installSplashScreen(this);
+    splashScreen.setKeepOnScreenCondition(
+            () -> !DirectoryInitialization.areDolphinDirectoriesReady());
+
     super.onCreate(savedInstanceState);
-    setContentView(R.layout.activity_tv_main);
+    mBinding = ActivityTvMainBinding.inflate(getLayoutInflater());
+    setContentView(mBinding.getRoot());
 
     setupUI();
 
@@ -75,7 +83,7 @@ public final class TvMainActivity extends FragmentActivity
     if (DirectoryInitialization.shouldStart(this))
     {
       DirectoryInitialization.start(this);
-      GameFileCacheManager.startLoad(this);
+      GameFileCacheManager.startLoad();
     }
 
     mPresenter.onResume();
@@ -114,11 +122,7 @@ public final class TvMainActivity extends FragmentActivity
 
   void setupUI()
   {
-    mSwipeRefresh = findViewById(R.id.swipe_refresh);
-
-    TypedValue typedValue = new TypedValue();
-    getTheme().resolveAttribute(R.attr.colorPrimary, typedValue, true);
-    mSwipeRefresh.setColorSchemeColors(typedValue.data);
+    mSwipeRefresh = mBinding.swipeRefresh;
 
     mSwipeRefresh.setOnRefreshListener(this);
 
@@ -133,7 +137,7 @@ public final class TvMainActivity extends FragmentActivity
 
     // Set display parameters for the BrowseFragment
     mBrowseFragment.setHeadersState(BrowseSupportFragment.HEADERS_ENABLED);
-    mBrowseFragment.setBrandColor(ContextCompat.getColor(this, R.color.dolphin_blue_secondary));
+    mBrowseFragment.setBrandColor(ContextCompat.getColor(this, R.color.dolphin_blue));
     buildRowsAdapter();
 
     mBrowseFragment.setOnItemViewClickedListener(
@@ -292,7 +296,7 @@ public final class TvMainActivity extends FragmentActivity
       }
 
       DirectoryInitialization.start(this);
-      GameFileCacheManager.startLoad(this);
+      GameFileCacheManager.startLoad();
     }
   }
 
@@ -303,7 +307,7 @@ public final class TvMainActivity extends FragmentActivity
   public void onRefresh()
   {
     setRefreshing(true);
-    GameFileCacheManager.startRescan(this);
+    GameFileCacheManager.startRescan();
   }
 
   private void buildRowsAdapter()
@@ -313,7 +317,7 @@ public final class TvMainActivity extends FragmentActivity
 
     if (!DirectoryInitialization.isWaitingForWriteAccess(this))
     {
-      GameFileCacheManager.startLoad(this);
+      GameFileCacheManager.startLoad();
     }
 
     for (Platform platform : Platform.values())
@@ -359,7 +363,7 @@ public final class TvMainActivity extends FragmentActivity
     ArrayObjectAdapter rowItems = new ArrayObjectAdapter(new SettingsRowPresenter());
 
     rowItems.add(new TvSettingsItem(R.id.menu_settings,
-            R.drawable.ic_settings,
+            R.drawable.ic_settings_tv,
             R.string.grid_menu_settings));
 
     rowItems.add(new TvSettingsItem(R.id.button_add_directory,
@@ -367,31 +371,31 @@ public final class TvMainActivity extends FragmentActivity
             R.string.add_directory_title));
 
     rowItems.add(new TvSettingsItem(R.id.menu_refresh,
-            R.drawable.ic_refresh,
+            R.drawable.ic_refresh_tv,
             R.string.grid_menu_refresh));
 
     rowItems.add(new TvSettingsItem(R.id.menu_open_file,
-            R.drawable.ic_play,
+            R.drawable.ic_play_tv,
             R.string.grid_menu_open_file));
 
     rowItems.add(new TvSettingsItem(R.id.menu_install_wad,
-            R.drawable.ic_folder,
+            R.drawable.ic_folder_tv,
             R.string.grid_menu_install_wad));
 
     rowItems.add(new TvSettingsItem(R.id.menu_load_wii_system_menu,
-            R.drawable.ic_folder,
+            R.drawable.ic_folder_tv,
             R.string.grid_menu_load_wii_system_menu));
 
     rowItems.add(new TvSettingsItem(R.id.menu_import_wii_save,
-            R.drawable.ic_folder,
+            R.drawable.ic_folder_tv,
             R.string.grid_menu_import_wii_save));
 
     rowItems.add(new TvSettingsItem(R.id.menu_import_nand_backup,
-            R.drawable.ic_folder,
+            R.drawable.ic_folder_tv,
             R.string.grid_menu_import_nand_backup));
 
     rowItems.add(new TvSettingsItem(R.id.menu_online_system_update,
-            R.drawable.ic_folder,
+            R.drawable.ic_folder_tv,
             R.string.grid_menu_online_system_update));
 
     // Create a header for this row.
