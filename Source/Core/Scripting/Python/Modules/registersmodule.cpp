@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "registersmodule.h"
+#include "Scripting/Python/Modules/registersmodule.h"
 
 #include "Core/API/Registers.h"
 

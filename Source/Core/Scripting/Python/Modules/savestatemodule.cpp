@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "savestatemodule.h"
+#include "Scripting/Python/Modules/savestatemodule.h"
 
 #include "Common/Logging/Log.h"
 #include "Core/State.h"

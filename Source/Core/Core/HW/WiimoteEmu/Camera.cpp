@@ -115,7 +115,7 @@ void CameraLogic::Update(const std::array<CameraPoint, NUM_POINTS>& camera_point
   if (!IOS::g_gpio_out[IOS::GPIO::SENSOR_BAR])
     return;
 
-  switch (mode)
+  switch (m_reg_data.mode)
   {
   case IR_MODE_BASIC:
     for (std::size_t i = 0; i != camera_points.size() / 2; ++i)

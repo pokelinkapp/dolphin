@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "guimodule.h"
+#include "Scripting/Python/Modules/guimodule.h"
 
 #include "Common/Logging/Log.h"
 #include "Core/API/Gui.h"

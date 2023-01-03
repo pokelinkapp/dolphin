@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "dolphinmodule.h"
+#include "Scripting/Python/Modules/dolphinmodule.h"
 
 #include "Common/Logging/Log.h"
 #include "Scripting/Python/Utils/module.h"

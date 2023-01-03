@@ -778,7 +778,7 @@ u64 HostRead_U64(const u32 address)
 {
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
-  return ReadFromHardware<XCheckTLBFlag::NoException, u64, TranslateCondition::Always>(address);
+  return ReadFromHardware<XCheckTLBFlag::NoException, u64, TranslateCondition::Always>(memory, address);
 }
 
 s8 HostRead_S8(const u32 address)
@@ -798,7 +798,7 @@ s32 HostRead_S32(const u32 address)
 
 s64 HostRead_S64(const u32 address)
 {
-  return static_cast<s64>(HostRead_U64(memory, address));
+  return static_cast<s64>(HostRead_U64(address));
 }
 
 float HostRead_F32(const u32 address)

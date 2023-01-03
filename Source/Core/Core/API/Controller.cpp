@@ -104,7 +104,7 @@ void WiiIRManip::PerformInputManip(WiimoteCommon::DataReportBuilder& rpt, int co
   }
   const WiiInputIROverride& input_override = iter->second;
 
-  u8* const ir_data = rpt.GetIRDataPtr();
+//  u8* const ir_data = rpt.GetIRDataPtr();
   
   using WiimoteEmu::CameraLogic;
   u8 mode = CameraLogic::IR_MODE_BASIC;
@@ -121,7 +121,9 @@ void WiiIRManip::PerformInputManip(WiimoteCommon::DataReportBuilder& rpt, int co
     Matrix44::FromQuaternion(Quaternion::RotateXYZ(ir_transform.pitch_yaw_roll)) *
     Matrix44::Translate(ir_transform.position);
   const Vec2 fov = {CameraLogic::CAMERA_FOV_X, CameraLogic::CAMERA_FOV_Y};
-  CameraLogic::WriteIRDataForTransform(ir_data, mode, fov, transform);
+  // TODO figure out how to hook this up again
+//  auto cam_points = CameraLogic::GetCameraPoints(transform, fov);
+//  m_camera_logic->Update(cam_points);
 }
 
 GCManip& GetGCManip()

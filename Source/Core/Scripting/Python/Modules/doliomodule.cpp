@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "doliomodule.h"
+#include "Scripting/Python/Modules/doliomodule.h"
 
 #include <sstream>
 

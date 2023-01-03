@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "coroutine.h"
+#include "Scripting/Python/coroutine.h"
 
 #include <map>
 

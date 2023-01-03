@@ -13,6 +13,7 @@
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
     <Import Project="$(VSPropsDir)Base.props" />
+    <Import Project="$(VSPropsDir)Base.Dolphin.props" />
     <Import Project="$(VSPropsDir)PCHUse.props" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
@@ -21,6 +22,8 @@
       <AdditionalIncludeDirectories>$(ExternalsDir)python\$(Platform)\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
   </ItemDefinitionGroup>
+  <Import Project="$(ExternalsDir)imgui\exports.props" />
+  <Import Project="$(ExternalsDir)fmt\exports.props" />
   <ItemGroup>
     <ClCompile Include="Python\coroutine.cpp" />
     <ClCompile Include="Python\Modules\controllermodule.cpp" />
@@ -44,7 +47,7 @@
     <ClInclude Include="Python\Modules\guimodule.h" />
     <ClInclude Include="Python\Modules\memorymodule.h" />
     <ClInclude Include="Python\Modules\savestatemodule.h" />
-    <ClCompile Include="Python\Modules\registersmodule.h" />
+    <ClInclude Include="Python\Modules\registersmodule.h" />
     <ClInclude Include="Python\PyScriptingBackend.h" />
     <ClInclude Include="Python\Utils\as_py_func.h" />
     <ClInclude Include="Python\Utils\convert.h" />
