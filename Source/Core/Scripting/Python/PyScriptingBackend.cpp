@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "PyScriptingBackend.h"
+#include "Scripting/Python/PyScriptingBackend.h"
 
 #include <Python.h>
 #include <string>

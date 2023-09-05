@@ -52,6 +52,7 @@
 #include "Core/HW/VideoInterface.h"
 #include "Core/Host.h"
 #include "Core/Movie.h"
+#include "Core/System.h"
 
 #include "InputCommon/ControllerInterface/ControllerInterface.h"
 
@@ -68,6 +69,7 @@
 #include "VideoCommon/FramebufferManager.h"
 #include "VideoCommon/FramebufferShaderGen.h"
 #include "VideoCommon/FreeLookCamera.h"
+#include "VideoCommon/GraphicsModSystem/Config/GraphicsModGroup.h"
 #include "VideoCommon/NetPlayChatUI.h"
 #include "VideoCommon/NetPlayGolfUI.h"
 #include "VideoCommon/OnScreenDisplay.h"
@@ -136,6 +138,22 @@ bool Renderer::Initialize()
   {
     PanicAlertFmt("Failed to initialize bounding box.");
     return false;
+  }
+
+  if (g_ActiveConfig.bGraphicMods)
+  {
+    // If a config change occurred in a previous session,
+    // remember the old change count value.  By setting
+    // our current change count to the old value, we
+    // avoid loading the stale data when we
+    // check for config changes.
+    const u32 old_game_mod_changes = g_ActiveConfig.graphics_mod_config ?
+                                         g_ActiveConfig.graphics_mod_config->GetChangeCount() :
+                                         0;
+    g_ActiveConfig.graphics_mod_config = GraphicsModGroupConfig(SConfig::GetInstance().GetGameID());
+    g_ActiveConfig.graphics_mod_config->Load();
+    g_ActiveConfig.graphics_mod_config->SetChangeCount(old_game_mod_changes);
+    m_graphics_mod_manager.Load(*g_ActiveConfig.graphics_mod_config);
   }
 
   return true;
@@ -263,7 +281,8 @@ u32 Renderer::AccessEFB(EFBAccessType type, u32 x, u32 y, u32 poke_data)
     }
 
     // check what to do with the alpha channel (GX_PokeAlphaRead)
-    PixelEngine::AlphaReadMode alpha_read_mode = PixelEngine::GetAlphaReadMode();
+    PixelEngine::AlphaReadMode alpha_read_mode =
+        Core::System::GetInstance().GetPixelEngine().GetAlphaReadMode();
 
     if (alpha_read_mode == PixelEngine::AlphaReadMode::ReadNone)
     {
@@ -465,14 +484,30 @@ void Renderer::CheckForConfigChanges()
   const u32 old_multisamples = g_ActiveConfig.iMultisamples;
   const int old_anisotropy = g_ActiveConfig.iMaxAnisotropy;
   const int old_efb_access_tile_size = g_ActiveConfig.iEFBAccessTileSize;
-  const bool old_force_filtering = g_ActiveConfig.bForceFiltering;
+  const auto old_texture_filtering_mode = g_ActiveConfig.texture_filtering_mode;
   const bool old_vsync = g_ActiveConfig.bVSyncActive;
   const bool old_bbox = g_ActiveConfig.bBBoxEnable;
+  const u32 old_game_mod_changes =
+      g_ActiveConfig.graphics_mod_config ? g_ActiveConfig.graphics_mod_config->GetChangeCount() : 0;
+  const bool old_graphics_mods_enabled = g_ActiveConfig.bGraphicMods;
 
   UpdateActiveConfig();
   FreeLook::UpdateActiveConfig();
+  g_vertex_manager->OnConfigChange();
 
   g_freelook_camera.SetControlType(FreeLook::GetActiveConfig().camera_config.control_type);
+
+  if (g_ActiveConfig.bGraphicMods && !old_graphics_mods_enabled)
+  {
+    g_ActiveConfig.graphics_mod_config = GraphicsModGroupConfig(SConfig::GetInstance().GetGameID());
+    g_ActiveConfig.graphics_mod_config->Load();
+  }
+
+  if (g_ActiveConfig.graphics_mod_config &&
+      (old_game_mod_changes != g_ActiveConfig.graphics_mod_config->GetChangeCount()))
+  {
+    m_graphics_mod_manager.Load(*g_ActiveConfig.graphics_mod_config);
+  }
 
   // Update texture cache settings with any changed options.
   g_texture_cache->OnConfigChanged(g_ActiveConfig);
@@ -502,7 +537,7 @@ void Renderer::CheckForConfigChanges()
     changed_bits |= CONFIG_CHANGE_BIT_MULTISAMPLES;
   if (old_anisotropy != g_ActiveConfig.iMaxAnisotropy)
     changed_bits |= CONFIG_CHANGE_BIT_ANISOTROPY;
-  if (old_force_filtering != g_ActiveConfig.bForceFiltering)
+  if (old_texture_filtering_mode != g_ActiveConfig.texture_filtering_mode)
     changed_bits |= CONFIG_CHANGE_BIT_FORCE_TEXTURE_FILTERING;
   if (old_vsync != g_ActiveConfig.bVSyncActive)
     changed_bits |= CONFIG_CHANGE_BIT_VSYNC;
@@ -560,21 +595,42 @@ void Renderer::CheckForConfigChanges()
 // Create On-Screen-Messages
 void Renderer::DrawDebugText()
 {
-  if (g_ActiveConfig.bShowFPS)
+  if (g_ActiveConfig.bShowFPS || g_ActiveConfig.bShowVPS || g_ActiveConfig.bShowSpeed)
   {
     // Position in the top-right corner of the screen.
     ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - (10.0f * m_backbuffer_scale),
-                                   10.0f * m_backbuffer_scale),
+                                   10.f * m_backbuffer_scale),
                             ImGuiCond_Always, ImVec2(1.0f, 0.0f));
-    ImGui::SetNextWindowSize(ImVec2(100.0f * m_backbuffer_scale, 30.0f * m_backbuffer_scale));
 
-    if (ImGui::Begin("FPS", nullptr,
+    int count = g_ActiveConfig.bShowFPS + g_ActiveConfig.bShowVPS + g_ActiveConfig.bShowSpeed;
+    ImGui::SetNextWindowSize(
+        ImVec2(94.f * m_backbuffer_scale, (12.f + 17.f * count) * m_backbuffer_scale));
+
+    if (ImGui::Begin("Performance", nullptr,
                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoInputs |
                          ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoSavedSettings |
                          ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoNav |
                          ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing))
     {
-      ImGui::TextColored(ImVec4(0.0f, 1.0f, 1.0f, 1.0f), "FPS: %.2f", m_fps_counter.GetFPS());
+      const double fps = m_fps_counter.GetFPS();
+      const double vps = m_vps_counter.GetFPS();
+      const double speed = 100.0 * vps / VideoInterface::GetTargetRefreshRate();
+
+      // Change Color based on % Speed
+      float r = 0.0f, g = 1.0f, b = 1.0f;
+      if (g_ActiveConfig.bShowSpeedColors)
+      {
+        r = 1.0 - (speed - 80.0) / 20.0;
+        g = speed / 80.0;
+        b = (speed - 90.0) / 10.0;
+      }
+
+      if (g_ActiveConfig.bShowFPS)
+        ImGui::TextColored(ImVec4(r, g, b, 1.0f), "FPS:%7.2lf", fps);
+      if (g_ActiveConfig.bShowVPS)
+        ImGui::TextColored(ImVec4(r, g, b, 1.0f), "VPS:%7.2lf", vps);
+      if (g_ActiveConfig.bShowSpeed)
+        ImGui::TextColored(ImVec4(r, g, b, 1.0f), "Speed:%4.0lf%%", speed);
     }
     ImGui::End();
   }
@@ -586,9 +642,9 @@ void Renderer::DrawDebugText()
   if (show_movie_window)
   {
     // Position under the FPS display.
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetIO().DisplaySize.x - (10.0f * m_backbuffer_scale),
-                                   50.0f * m_backbuffer_scale),
-                            ImGuiCond_FirstUseEver, ImVec2(1.0f, 0.0f));
+    ImGui::SetNextWindowPos(
+        ImVec2(ImGui::GetIO().DisplaySize.x - 10.f * m_backbuffer_scale, 80.f * m_backbuffer_scale),
+        ImGuiCond_FirstUseEver, ImVec2(1.0f, 0.0f));
     ImGui::SetNextWindowSizeConstraints(
         ImVec2(150.0f * m_backbuffer_scale, 20.0f * m_backbuffer_scale),
         ImGui::GetIO().DisplaySize);
@@ -956,9 +1012,11 @@ void Renderer::CheckFifoRecording()
     RecordVideoMemory();
   }
 
-  FifoRecorder::GetInstance().EndFrame(
-      CommandProcessor::fifo.CPBase.load(std::memory_order_relaxed),
-      CommandProcessor::fifo.CPEnd.load(std::memory_order_relaxed));
+  auto& system = Core::System::GetInstance();
+  auto& command_processor = system.GetCommandProcessor();
+  const auto& fifo = command_processor.GetFifo();
+  FifoRecorder::GetInstance().EndFrame(fifo.CPBase.load(std::memory_order_relaxed),
+                                       fifo.CPEnd.load(std::memory_order_relaxed));
 }
 
 void Renderer::RecordVideoMemory()
@@ -979,6 +1037,8 @@ void Renderer::RecordVideoMemory()
 
 bool Renderer::InitializeImGui()
 {
+  std::unique_lock<std::mutex> imgui_lock(m_imgui_mutex);
+
   if (!IMGUI_CHECKVERSION())
   {
     PanicAlertFmt("ImGui version check failed");
@@ -1037,8 +1097,8 @@ bool Renderer::InitializeImGui()
   if (!RecompileImGuiPipeline())
     return false;
 
-  m_imgui_last_frame_time = Common::Timer::GetTimeUs();
-  BeginImGuiFrame();
+  m_imgui_last_frame_time = Common::Timer::NowUs();
+  BeginImGuiFrameUnlocked();  // lock is already held
   return true;
 }
 
@@ -1099,6 +1159,8 @@ bool Renderer::RecompileImGuiPipeline()
 
 void Renderer::ShutdownImGui()
 {
+  std::unique_lock<std::mutex> imgui_lock(m_imgui_mutex);
+
   ImGui::EndFrame();
   ImGui::DestroyContext();
   m_imgui_pipeline.reset();
@@ -1109,8 +1171,12 @@ void Renderer::ShutdownImGui()
 void Renderer::BeginImGuiFrame()
 {
   std::unique_lock<std::mutex> imgui_lock(m_imgui_mutex);
+  BeginImGuiFrameUnlocked();
+}
 
-  const u64 current_time_us = Common::Timer::GetTimeUs();
+void Renderer::BeginImGuiFrameUnlocked()
+{
+  const u64 current_time_us = Common::Timer::NowUs();
   const u64 time_diff_us = current_time_us - m_imgui_last_frame_time;
   const float time_diff_secs = static_cast<float>(time_diff_us / 1000000.0);
   m_imgui_last_frame_time = current_time_us;
@@ -1312,16 +1378,27 @@ void Renderer::Swap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u6
   // behind the renderer.
   FlushFrameDump();
 
+  if (g_ActiveConfig.bGraphicMods)
+  {
+    m_graphics_mod_manager.EndOfFrame();
+  }
+
+  g_framebuffer_manager->EndOfFrame();
+
   if (xfb_addr && fb_width && fb_stride && fb_height)
   {
     // Get the current XFB from texture cache
     MathUtil::Rectangle<int> xfb_rect;
     const auto* xfb_entry =
         g_texture_cache->GetXFBTexture(xfb_addr, fb_width, fb_height, fb_stride, &xfb_rect);
-    if (xfb_entry &&
-        (!g_ActiveConfig.bSkipPresentingDuplicateXFBs || xfb_entry->id != m_last_xfb_id))
+    const bool is_duplicate_frame = xfb_entry->id == m_last_xfb_id;
+
+    m_vps_counter.Update();
+    if (!is_duplicate_frame)
+      m_fps_counter.Update();
+
+    if (xfb_entry && (!g_ActiveConfig.bSkipPresentingDuplicateXFBs || !is_duplicate_frame))
     {
-      const bool is_duplicate_frame = xfb_entry->id == m_last_xfb_id;
       m_last_xfb_id = xfb_entry->id;
 
       // Since we use the common pipelines here and draw vertices if a batch is currently being
@@ -1372,8 +1449,6 @@ void Renderer::Swap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u6
 
       if (!is_duplicate_frame)
       {
-        m_fps_counter.Update();
-
         DolphinAnalytics::PerformanceSample perf_sample;
         perf_sample.speed_ratio = SystemTimers::GetEstimatedEmulationPerformance();
         perf_sample.num_prims = g_stats.this_frame.num_prims + g_stats.this_frame.num_dl_prims;
@@ -1842,4 +1917,9 @@ void Renderer::DoState(PointerWrap& p)
 std::unique_ptr<VideoCommon::AsyncShaderCompiler> Renderer::CreateAsyncShaderCompiler()
 {
   return std::make_unique<VideoCommon::AsyncShaderCompiler>();
+}
+
+const GraphicsModManager& Renderer::GetGraphicsModManager() const
+{
+  return m_graphics_mod_manager;
 }

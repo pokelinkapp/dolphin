@@ -15,7 +15,7 @@ void AddMemcheck(u32 addr)
   TMemCheck memcheck;
   memcheck.start_address = addr;
   memcheck.end_address = addr;
-  PowerPC::memchecks.Add(memcheck);
+  PowerPC::memchecks.Add(std::move(memcheck));
 }
 
 void RemoveMemcheck(u32 addr)

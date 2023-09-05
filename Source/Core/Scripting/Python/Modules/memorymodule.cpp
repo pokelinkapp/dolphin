@@ -2,10 +2,11 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "memorymodule.h"
+#include "Scripting/Python/Modules/memorymodule.h"
 
 #include "Core/API/Memory.h"
 #include "Core/HW/Memmap.h"
+#include "Core/System.h"
 
 #include "Scripting/Python/Utils/module.h"
 #include "Scripting/Python/Utils/as_py_func.h"
@@ -24,7 +25,7 @@ static PyObject* Read(PyObject* self, PyObject* args)
 {
   // If Memory wasn't static, you'd get the memory instance from the state:
   //MemoryModuleState* state = Py::GetState<MemoryModuleState>();
-  if (!Memory::IsInitialized())
+  if (!Core::System::GetInstance().GetMemory().IsInitialized())
   {
     PyErr_SetString(PyExc_ValueError, "memory is not initialized");
     return nullptr;
@@ -42,7 +43,7 @@ static PyObject* Write(PyObject* self, PyObject* args)
 {
   // If Memory wasn't static, you'd get the memory instance from the state:
   //MemoryModuleState* state = Py::GetState<MemoryModuleState>();
-  if (!Memory::IsInitialized())
+  if (!Core::System::GetInstance().GetMemory().IsInitialized())
   {
     PyErr_SetString(PyExc_ValueError, "memory is not initialized");
     return nullptr;

@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "eventmodule.h"
+#include "Scripting/Python/Modules/eventmodule.h"
 
 #include <deque>
 #include <functional>

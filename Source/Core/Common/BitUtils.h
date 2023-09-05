@@ -108,50 +108,6 @@ constexpr Result ExtractBits(const T src) noexcept
 }
 
 ///
-/// Rotates a value left (ROL).
-///
-/// @param  value  The value to rotate.
-/// @param  amount The number of bits to rotate the value.
-/// @tparam T      An unsigned type.
-///
-/// @return The rotated value.
-///
-template <typename T>
-constexpr T RotateLeft(const T value, size_t amount) noexcept
-{
-  static_assert(std::is_unsigned<T>(), "Can only rotate unsigned types left.");
-
-  amount %= BitSize<T>();
-
-  if (amount == 0)
-    return value;
-
-  return static_cast<T>((value << amount) | (value >> (BitSize<T>() - amount)));
-}
-
-///
-/// Rotates a value right (ROR).
-///
-/// @param  value  The value to rotate.
-/// @param  amount The number of bits to rotate the value.
-/// @tparam T      An unsigned type.
-///
-/// @return The rotated value.
-///
-template <typename T>
-constexpr T RotateRight(const T value, size_t amount) noexcept
-{
-  static_assert(std::is_unsigned<T>(), "Can only rotate unsigned types right.");
-
-  amount %= BitSize<T>();
-
-  if (amount == 0)
-    return value;
-
-  return static_cast<T>((value >> amount) | (value << (BitSize<T>() - amount)));
-}
-
-///
 /// Verifies whether the supplied value is a valid bit mask of the form 0b00...0011...11.
 /// Both edge cases of all zeros and all ones are considered valid masks, too.
 ///
@@ -201,7 +157,7 @@ inline To BitCast(const From& source) noexcept
   static_assert(std::is_trivially_copyable<To>(),
                 "BitCast destination type must be trivially copyable.");
 
-  std::aligned_storage_t<sizeof(To), alignof(To)> storage;
+  alignas(To) std::byte storage[sizeof(To)];
   std::memcpy(&storage, &source, sizeof(storage));
   return reinterpret_cast<To&>(storage);
 }
@@ -411,15 +367,54 @@ constexpr int CountLeadingZeros(uint32_t value)
 #endif
 }
 
-#undef CONSTEXPR_FROM_INTRINSIC
-
 template <typename T>
-constexpr T LargestPowerOf2Divisor(T value)
+constexpr int CountTrailingZerosConst(T value)
 {
-  static_assert(std::is_unsigned<T>(),
-                "LargestPowerOf2Divisor only makes sense for unsigned types.");
+  int result = sizeof(T) * 8;
+  while (value)
+  {
+    result--;
+    value <<= 1;
+  }
+  return result;
+}
 
-  return value & -static_cast<std::make_signed_t<T>>(value);
+constexpr int CountTrailingZeros(uint64_t value)
+{
+#if defined(__GNUC__)
+  return value ? __builtin_ctzll(value) : 64;
+#elif defined(_MSC_VER)
+  if (std::is_constant_evaluated())
+  {
+    return CountTrailingZerosConst(value);
+  }
+  else
+  {
+    unsigned long index = 0;
+    return _BitScanForward64(&index, value) ? index : 64;
+  }
+#else
+  return CountTrailingZerosConst(value);
+#endif
+}
+
+constexpr int CountTrailingZeros(uint32_t value)
+{
+#if defined(__GNUC__)
+  return value ? __builtin_ctz(value) : 32;
+#elif defined(_MSC_VER)
+  if (std::is_constant_evaluated())
+  {
+    return CountTrailingZerosConst(value);
+  }
+  else
+  {
+    unsigned long index = 0;
+    return _BitScanForward(&index, value) ? index : 32;
+  }
+#else
+  return CountTrailingZerosConst(value);
+#endif
 }
 
 }  // namespace Common

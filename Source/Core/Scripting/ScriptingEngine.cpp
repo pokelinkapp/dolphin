@@ -2,7 +2,7 @@
 // Licensed under GPLv2+
 // Refer to the license.txt file included.
 
-#include "ScriptingEngine.h"
+#include "Scripting/ScriptingEngine.h"
 
 #include "Core/API/Events.h"
 #include "Core/API/Gui.h"

@@ -63,6 +63,7 @@
 #include "Core/IOS/USB/Bluetooth/WiimoteDevice.h"
 #include "Core/NetPlayProto.h"
 #include "Core/State.h"
+#include "Core/System.h"
 #include "Core/WiiUtils.h"
 
 #include "DiscIO/Enums.h"
@@ -121,9 +122,6 @@ static bool s_bPolled = false;
 // s_InputDisplay is used by both CPU and GPU (is mutable).
 static std::mutex s_input_display_lock;
 static std::string s_InputDisplay[8];
-
-static GCManipFunction s_gc_manip_func;
-static WiiManipFunction s_wii_manip_func;
 
 static std::string s_current_file_name;
 
@@ -293,9 +291,12 @@ void InputUpdate()
   s_currentInputCount++;
   if (IsRecordingInput())
   {
+    auto& system = Core::System::GetInstance();
+    auto& core_timing = system.GetCoreTiming();
+
     s_totalInputCount = s_currentInputCount;
-    s_totalTickCount += CoreTiming::GetTicks() - s_tickCountAtLastInput;
-    s_tickCountAtLastInput = CoreTiming::GetTicks();
+    s_totalTickCount += core_timing.GetTicks() - s_tickCountAtLastInput;
+    s_tickCountAtLastInput = core_timing.GetTicks();
   }
 }
 
@@ -1184,7 +1185,8 @@ void LoadInput(const std::string& movie_path)
 static void CheckInputEnd()
 {
   if (s_currentByte >= s_temp_input.size() ||
-      (CoreTiming::GetTicks() > s_totalTickCount && !IsRecordingInputFromSaveState()))
+      (Core::System::GetInstance().GetCoreTiming().GetTicks() > s_totalTickCount &&
+       !IsRecordingInputFromSaveState()))
   {
     EndPlayInput(!s_bReadOnly);
   }
@@ -1426,28 +1428,6 @@ void SaveRecording(const std::string& filename)
     Core::DisplayMessage(fmt::format("Failed to save {}", filename), 2000);
 }
 
-void SetGCInputManip(GCManipFunction func)
-{
-  s_gc_manip_func = std::move(func);
-}
-void SetWiiInputManip(WiiManipFunction func)
-{
-  s_wii_manip_func = std::move(func);
-}
-
-// NOTE: CPU Thread
-void CallGCInputManip(GCPadStatus* PadStatus, int controllerID)
-{
-  if (s_gc_manip_func)
-    s_gc_manip_func(PadStatus, controllerID);
-}
-// NOTE: CPU Thread
-void CallWiiInputManip(DataReportBuilder& rpt, int controllerID, int ext, const EncryptionKey& key)
-{
-  if (s_wii_manip_func)
-    s_wii_manip_func(rpt, controllerID, ext, key);
-}
-
 // NOTE: GPU Thread
 void SetGraphicsConfig()
 {
@@ -1479,6 +1459,9 @@ void GetSettings()
   }
   else
   {
+    const auto raw_memcard_exists = [](ExpansionInterface::Slot card_slot) {
+      return File::Exists(Config::GetMemcardPath(card_slot, SConfig::GetInstance().m_region));
+    };
     const auto gci_folder_has_saves = [](ExpansionInterface::Slot card_slot) {
       const auto [path, migrate] = ExpansionInterface::CEXIMemoryCard::GetGCIFolderPath(
           card_slot, ExpansionInterface::AllowMovieFolder::No);
@@ -1486,11 +1469,10 @@ void GetSettings()
       return number_of_saves > 0;
     };
 
-    s_bClearSave =
-        !(slot_a_has_raw_memcard && File::Exists(Config::Get(Config::MAIN_MEMCARD_A_PATH))) &&
-        !(slot_b_has_raw_memcard && File::Exists(Config::Get(Config::MAIN_MEMCARD_B_PATH))) &&
-        !(slot_a_has_gci_folder && gci_folder_has_saves(ExpansionInterface::Slot::A)) &&
-        !(slot_b_has_gci_folder && gci_folder_has_saves(ExpansionInterface::Slot::B));
+    s_bClearSave = !(slot_a_has_raw_memcard && raw_memcard_exists(ExpansionInterface::Slot::A)) &&
+                   !(slot_b_has_raw_memcard && raw_memcard_exists(ExpansionInterface::Slot::B)) &&
+                   !(slot_a_has_gci_folder && gci_folder_has_saves(ExpansionInterface::Slot::A)) &&
+                   !(slot_b_has_gci_folder && gci_folder_has_saves(ExpansionInterface::Slot::B));
   }
   s_memcards |= (slot_a_has_raw_memcard || slot_a_has_gci_folder) << 0;
   s_memcards |= (slot_b_has_raw_memcard || slot_b_has_gci_folder) << 1;

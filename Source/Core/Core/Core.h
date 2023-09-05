@@ -127,7 +127,7 @@ void OnFrameBegin();
 
 void VideoThrottle();
 
-void UpdateTitle(u32 ElapseTime);
+void UpdateTitle(u64 elapsed_ms);
 
 // Run a function as the CPU thread.
 //
