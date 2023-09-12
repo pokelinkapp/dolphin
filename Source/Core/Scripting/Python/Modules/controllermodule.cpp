@@ -5,7 +5,7 @@
 #include "Scripting/Python/Modules/controllermodule.h"
 
 #include "Core/API/Controller.h"
-#include "Common/Logging/Log.h"
+#include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Scripting/Python/PyScriptingBackend.h"
 #include "Scripting/Python/Utils/module.h"
 
@@ -13,158 +13,48 @@ namespace PyScripting
 {
 struct ControllerModuleState
 {
-  API::GCManip* gc_manip;
-  API::WiiButtonsManip* wii_buttons_manip;
-  API::WiiIRManip* wii_ir_manip;
+  API::BaseManip* gc_manip;
+  API::BaseManip* wii_manip;
+  API::BaseManip* wii_classic_manip;
+  API::BaseManip* wii_nunchuk_manip;
+  API::BaseManip* gba_manip;
 };
-
-static PyObject* GCPadStatusToPyDict(GCPadStatus status) {
-  return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,"
-                       "s:B,s:B,s:B,s:B,s:B,s:B,s:B,s:B,s:O}",
-      "Left", status.button & PAD_BUTTON_LEFT ? Py_True : Py_False,
-      "Right", status.button & PAD_BUTTON_RIGHT ? Py_True : Py_False,
-      "Down", status.button & PAD_BUTTON_DOWN ? Py_True : Py_False,
-      "Up", status.button & PAD_BUTTON_UP ? Py_True : Py_False,
-      "Z", status.button & PAD_TRIGGER_Z ? Py_True : Py_False,
-      "R", status.button & PAD_TRIGGER_R ? Py_True : Py_False,
-      "L", status.button & PAD_TRIGGER_L ? Py_True : Py_False,
-      "A", status.button & PAD_BUTTON_A ? Py_True : Py_False,
-      "B", status.button & PAD_BUTTON_B ? Py_True : Py_False,
-      "X", status.button & PAD_BUTTON_X ? Py_True : Py_False,
-      "Y", status.button & PAD_BUTTON_Y ? Py_True : Py_False,
-      "Start", status.button & PAD_BUTTON_START ? Py_True : Py_False,
-
-      "StickX", status.stickX,
-      "StickY", status.stickY,
-      "CStickX", status.substickX,
-      "CStickY", status.substickY,
-      "TriggerLeft", status.triggerLeft,
-      "TriggerRight", status.triggerRight,
-      "AnalogA", status.analogA,
-      "AnalogB", status.analogB,
-
-      "Connected", status.isConnected ? Py_True : Py_False
-  );
-}
-
-static GCPadStatus GCPadStatusFromPyDict(PyObject* dict) {
-  PyObject* py_button_left = PyDict_GetItemString(dict, "Left");
-  PyObject* py_button_right = PyDict_GetItemString(dict, "Right");
-  PyObject* py_button_down = PyDict_GetItemString(dict, "Down");
-  PyObject* py_button_up = PyDict_GetItemString(dict, "Up");
-  PyObject* py_trigger_z = PyDict_GetItemString(dict, "Z");
-  PyObject* py_trigger_r = PyDict_GetItemString(dict, "R");
-  PyObject* py_trigger_l = PyDict_GetItemString(dict, "L");
-  PyObject* py_button_a = PyDict_GetItemString(dict, "A");
-  PyObject* py_button_b = PyDict_GetItemString(dict, "B");
-  PyObject* py_button_x = PyDict_GetItemString(dict, "X");
-  PyObject* py_button_y = PyDict_GetItemString(dict, "Y");
-  PyObject* py_button_start = PyDict_GetItemString(dict, "Start");
-  bool button_left = py_button_left != nullptr && PyObject_IsTrue(py_button_left);
-  bool button_right = py_button_right != nullptr && PyObject_IsTrue(py_button_right);
-  bool button_down = py_button_down != nullptr && PyObject_IsTrue(py_button_down);
-  bool button_up = py_button_up != nullptr && PyObject_IsTrue(py_button_up);
-  bool trigger_z = py_trigger_z != nullptr && PyObject_IsTrue(py_trigger_z);
-  bool trigger_r = py_trigger_r != nullptr && PyObject_IsTrue(py_trigger_r);
-  bool trigger_l = py_trigger_l != nullptr && PyObject_IsTrue(py_trigger_l);
-  bool button_a = py_button_a != nullptr && PyObject_IsTrue(py_button_a);
-  bool button_b = py_button_b != nullptr && PyObject_IsTrue(py_button_b);
-  bool button_x = py_button_x != nullptr && PyObject_IsTrue(py_button_x);
-  bool button_y = py_button_y != nullptr && PyObject_IsTrue(py_button_y);
-  bool button_start = py_button_start != nullptr && PyObject_IsTrue(py_button_start);
-
-  PyObject* py_stick_x = PyDict_GetItemString(dict, "StickX");
-  PyObject* py_stick_y = PyDict_GetItemString(dict, "StickY");
-  PyObject* py_substick_x = PyDict_GetItemString(dict, "CStickX");
-  PyObject* py_substick_y = PyDict_GetItemString(dict, "CStickY");
-  PyObject* py_trigger_left = PyDict_GetItemString(dict, "TriggerLeft");
-  PyObject* py_trigger_right = PyDict_GetItemString(dict, "TriggerRight");
-  PyObject* py_analog_a = PyDict_GetItemString(dict, "AnalogA");
-  PyObject* py_analog_b = PyDict_GetItemString(dict, "AnalogB");
-  u8 stick_x = py_stick_x == nullptr ? 128 : PyLong_AsUnsignedLong(py_stick_x);
-  u8 stick_y = py_stick_y == nullptr ? 128 : PyLong_AsUnsignedLong(py_stick_y);
-  u8 substick_x = py_substick_x == nullptr ? 128 : PyLong_AsUnsignedLong(py_substick_x);
-  u8 substick_y = py_substick_y == nullptr ? 128 : PyLong_AsUnsignedLong(py_substick_y);
-  u8 trigger_left = py_trigger_left == nullptr ? 0 : PyLong_AsUnsignedLong(py_trigger_left);
-  u8 trigger_right = py_trigger_right == nullptr ? 0 : PyLong_AsUnsignedLong(py_trigger_right);
-  u8 analog_a = py_analog_a == nullptr ? 0 : PyLong_AsUnsignedLong(py_analog_a);
-  u8 analog_b = py_analog_b == nullptr ? 0 : PyLong_AsUnsignedLong(py_analog_b);
-
-  PyObject* py_connected = PyDict_GetItemString(dict, "Connected");
-  bool connected = py_connected != nullptr && PyObject_IsTrue(py_connected);
-
-  GCPadStatus status;
-  status.button = (button_left ? PAD_BUTTON_LEFT : 0) | (button_right ? PAD_BUTTON_RIGHT : 0) |
-                  (button_down ? PAD_BUTTON_DOWN : 0) | (button_up ? PAD_BUTTON_UP : 0) |
-                  (trigger_z ? PAD_TRIGGER_Z : 0) | (trigger_r ? PAD_TRIGGER_R : 0) |
-                  (trigger_l ? PAD_TRIGGER_L : 0) | (button_a ? PAD_BUTTON_A : 0) |
-                  (button_b ? PAD_BUTTON_B : 0) | (button_x ? PAD_BUTTON_X : 0) |
-                  (button_y ? PAD_BUTTON_Y : 0) | (button_start ? PAD_BUTTON_START : 0);
-  status.stickX = stick_x;
-  status.stickY = stick_y;
-  status.substickX = substick_x;
-  status.substickY = substick_y;
-  status.triggerLeft = trigger_left;
-  status.triggerRight = trigger_right;
-  status.analogA = analog_a;
-  status.analogB = analog_b;
-  status.isConnected = connected;
-  return status;
-}
-
-static PyObject* WiiButtonDataToPyDict(WiimoteCommon::ButtonData status) {
-  return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O}",
-      "Left", status.left ? Py_True : Py_False,
-      "Right", status.right ? Py_True : Py_False,
-      "Down", status.down ? Py_True : Py_False,
-      "Up", status.up ? Py_True : Py_False,
-      "Plus", status.plus ? Py_True : Py_False,
-      "Two", status.two ? Py_True : Py_False,
-      "One", status.one ? Py_True : Py_False,
-      "B", status.b ? Py_True : Py_False,
-      "A", status.a ? Py_True : Py_False,
-      "Minus", status.minus ? Py_True : Py_False,
-      "Home", status.home ? Py_True : Py_False
-  );
-}
-
-static WiimoteCommon::ButtonData WiiButtonDataFromPyDict(PyObject* dict) {
-  WiimoteCommon::ButtonData status;
-  status.hex = 0;
-  PyObject* py_left = PyDict_GetItemString(dict, "Left");
-  PyObject* py_right = PyDict_GetItemString(dict, "Right");
-  PyObject* py_down = PyDict_GetItemString(dict, "Down");
-  PyObject* py_up = PyDict_GetItemString(dict, "Up");
-  PyObject* py_plus = PyDict_GetItemString(dict, "Plus");
-  PyObject* py_two = PyDict_GetItemString(dict, "Two");
-  PyObject* py_one = PyDict_GetItemString(dict, "One");
-  PyObject* py_b = PyDict_GetItemString(dict, "B");
-  PyObject* py_a = PyDict_GetItemString(dict, "A");
-  PyObject* py_minus = PyDict_GetItemString(dict, "Minus");
-  PyObject* py_home = PyDict_GetItemString(dict, "Home");
-  status.left = py_left != nullptr && PyObject_IsTrue(py_left);
-  status.right = py_right != nullptr && PyObject_IsTrue(py_right);
-  status.down = py_down != nullptr && PyObject_IsTrue(py_down);
-  status.up = py_up != nullptr && PyObject_IsTrue(py_up);
-  status.plus = py_plus != nullptr && PyObject_IsTrue(py_plus);
-  status.two = py_two != nullptr && PyObject_IsTrue(py_two);
-  status.one = py_one != nullptr && PyObject_IsTrue(py_one);
-  status.b = py_b != nullptr && PyObject_IsTrue(py_b);
-  status.a = py_a != nullptr && PyObject_IsTrue(py_a);
-  status.minus = py_minus != nullptr && PyObject_IsTrue(py_minus);
-  status.home = py_home != nullptr && PyObject_IsTrue(py_home);
-  return status;
-}
 
 static PyObject* get_gc_buttons(PyObject* module, PyObject* args)
 {
-  auto controller_id_opt = Py::ParseTuple<int>(args);
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
   if (!controller_id_opt.has_value())
     return nullptr;
-  int controller_id = std::get<0>(controller_id_opt.value());
-  ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
-  GCPadStatus pad_status = state->gc_manip->Get(controller_id);
-  return GCPadStatusToPyDict(pad_status);
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  const auto get_bool = [&](const API::InputKey& input_key) {
+    return state->gc_manip->Get(controller_id, input_key) != 0 ? Py_True : Py_False;
+  };
+  const auto get_analog = [&](const API::InputKey& input_key) {
+    return state->gc_manip->Get(controller_id, input_key);
+  };
+  return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,"
+                       "s:d,s:d,s:d,s:d,s:d,s:d}",
+      "A", get_bool(API::InputKey::GC_A),
+      "B", get_bool(API::InputKey::GC_B),
+      "X", get_bool(API::InputKey::GC_X),
+      "Y", get_bool(API::InputKey::GC_Y),
+      "Z", get_bool(API::InputKey::GC_Z),
+      "Start", get_bool(API::InputKey::GC_START),
+      "Up", get_bool(API::InputKey::GC_UP),
+      "Down", get_bool(API::InputKey::GC_DOWN),
+      "Left", get_bool(API::InputKey::GC_LEFT),
+      "Right", get_bool(API::InputKey::GC_RIGHT),
+      "L", get_bool(API::InputKey::GC_L),
+      "R", get_bool(API::InputKey::GC_R),
+
+      "StickX", get_analog(API::InputKey::GC_STICK_X),
+      "StickY", get_analog(API::InputKey::GC_STICK_Y),
+      "CStickX", get_analog(API::InputKey::GC_C_STICK_X),
+      "CStickY", get_analog(API::InputKey::GC_C_STICK_Y),
+      "TriggerLeft", get_analog(API::InputKey::GC_L_ANALOG),
+      "TriggerRight", get_analog(API::InputKey::GC_R_ANALOG)
+  );
 }
 
 static PyObject* set_gc_buttons(PyObject* module, PyObject* args)
@@ -173,21 +63,80 @@ static PyObject* set_gc_buttons(PyObject* module, PyObject* args)
   PyObject* dict;
   if (!PyArg_ParseTuple(args, "iO!", &controller_id, &PyDict_Type, &dict))
     return nullptr;
-  GCPadStatus status = GCPadStatusFromPyDict(dict);
-  ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
-  state->gc_manip->Set(status, controller_id, API::ClearOn::NextFrame);
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+
+  constexpr auto clear_on = API::ClearOn::NextFrame;
+  const auto set_bool = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->gc_manip->Set(controller_id, input_key, PyObject_IsTrue(py_object) ? 1 : 0, clear_on);
+  };
+  const auto set_analog = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->gc_manip->Set(controller_id, input_key, PyFloat_AsDouble(py_object), clear_on);
+  };
+
+  PyObject* py_button_a = PyDict_GetItemString(dict, "A");
+  PyObject* py_button_b = PyDict_GetItemString(dict, "B");
+  PyObject* py_button_x = PyDict_GetItemString(dict, "X");
+  PyObject* py_button_y = PyDict_GetItemString(dict, "Y");
+  PyObject* py_button_z = PyDict_GetItemString(dict, "Z");
+  PyObject* py_button_start = PyDict_GetItemString(dict, "Start");
+  PyObject* py_button_up = PyDict_GetItemString(dict, "Up");
+  PyObject* py_button_down = PyDict_GetItemString(dict, "Down");
+  PyObject* py_button_left = PyDict_GetItemString(dict, "Left");
+  PyObject* py_button_right = PyDict_GetItemString(dict, "Right");
+  PyObject* py_button_l = PyDict_GetItemString(dict, "L");
+  PyObject* py_button_r = PyDict_GetItemString(dict, "R");
+  if (py_button_a != nullptr) set_bool(API::InputKey::GC_A, py_button_a);
+  if (py_button_b != nullptr) set_bool(API::InputKey::GC_B, py_button_b);
+  if (py_button_x != nullptr) set_bool(API::InputKey::GC_X, py_button_x);
+  if (py_button_y != nullptr) set_bool(API::InputKey::GC_Y, py_button_y);
+  if (py_button_z != nullptr) set_bool(API::InputKey::GC_Z, py_button_z);
+  if (py_button_start != nullptr) set_bool(API::InputKey::GC_START, py_button_start);
+  if (py_button_up != nullptr) set_bool(API::InputKey::GC_UP, py_button_up);
+  if (py_button_down != nullptr) set_bool(API::InputKey::GC_DOWN, py_button_down);
+  if (py_button_left != nullptr) set_bool(API::InputKey::GC_LEFT, py_button_left);
+  if (py_button_right != nullptr) set_bool(API::InputKey::GC_RIGHT, py_button_right);
+  if (py_button_l != nullptr) set_bool(API::InputKey::GC_L, py_button_l);
+  if (py_button_r != nullptr) set_bool(API::InputKey::GC_R, py_button_r);
+
+  PyObject* py_stick_x = PyDict_GetItemString(dict, "StickX");
+  PyObject* py_stick_y = PyDict_GetItemString(dict, "StickY");
+  PyObject* py_c_stick_x = PyDict_GetItemString(dict, "CStickX");
+  PyObject* py_c_stick_y = PyDict_GetItemString(dict, "CStickY");
+  PyObject* py_trigger_left = PyDict_GetItemString(dict, "TriggerLeft");
+  PyObject* py_trigger_right = PyDict_GetItemString(dict, "TriggerRight");
+  if (py_stick_x != nullptr) set_analog(API::InputKey::GC_STICK_X, py_stick_x);
+  if (py_stick_y != nullptr) set_analog(API::InputKey::GC_STICK_Y, py_stick_y);
+  if (py_c_stick_x != nullptr) set_analog(API::InputKey::GC_C_STICK_X, py_c_stick_x);
+  if (py_c_stick_y != nullptr) set_analog(API::InputKey::GC_C_STICK_Y, py_c_stick_y);
+  if (py_trigger_left != nullptr) set_analog(API::InputKey::GC_L_ANALOG, py_trigger_left);
+  if (py_trigger_right != nullptr) set_analog(API::InputKey::GC_R_ANALOG, py_trigger_right);
+
   Py_RETURN_NONE;
 }
 
 static PyObject* get_wii_buttons(PyObject* module, PyObject* args)
 {
-  auto controller_id_opt = Py::ParseTuple<int>(args);
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
   if (!controller_id_opt.has_value())
     return nullptr;
-  int controller_id = std::get<0>(controller_id_opt.value());
-  ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
-  WiimoteCommon::ButtonData status = state->wii_buttons_manip->Get(controller_id);
-  return WiiButtonDataToPyDict(status);
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  const auto get_bool = [&](const API::InputKey& input_key) {
+    return state->wii_manip->Get(controller_id, input_key) != 0 ? Py_True : Py_False;
+  };
+  return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O}",
+      "A", get_bool(API::InputKey::WII_A),
+      "B", get_bool(API::InputKey::WII_B),
+      "One", get_bool(API::InputKey::WII_ONE),
+      "Two", get_bool(API::InputKey::WII_TWO),
+      "Plus", get_bool(API::InputKey::WII_PLUS),
+      "Minus", get_bool(API::InputKey::WII_MINUS),
+      "Home", get_bool(API::InputKey::WII_HOME),
+      "Up", get_bool(API::InputKey::WII_UP),
+      "Down", get_bool(API::InputKey::WII_DOWN),
+      "Left", get_bool(API::InputKey::WII_LEFT),
+      "Right", get_bool(API::InputKey::WII_RIGHT)
+  );
 }
 
 static PyObject* set_wii_buttons(PyObject* module, PyObject* args)
@@ -196,35 +145,404 @@ static PyObject* set_wii_buttons(PyObject* module, PyObject* args)
   PyObject* dict;
   if (!PyArg_ParseTuple(args, "iO!", &controller_id, &PyDict_Type, &dict))
     return nullptr;
-  WiimoteCommon::ButtonData status = WiiButtonDataFromPyDict(dict);
-  ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
-  state->wii_buttons_manip->Set(status, controller_id, API::ClearOn::NextFrame);
+
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+
+  const auto set_bool = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->wii_manip->Set(controller_id, input_key, PyObject_IsTrue(py_object) ? 1 : 0,
+                                  API::ClearOn::NextFrame);
+  };
+
+  PyObject* py_a = PyDict_GetItemString(dict, "A");
+  PyObject* py_b = PyDict_GetItemString(dict, "B");
+  PyObject* py_one = PyDict_GetItemString(dict, "One");
+  PyObject* py_two = PyDict_GetItemString(dict, "Two");
+  PyObject* py_plus = PyDict_GetItemString(dict, "Plus");
+  PyObject* py_minus = PyDict_GetItemString(dict, "Minus");
+  PyObject* py_home = PyDict_GetItemString(dict, "Home");
+  PyObject* py_up = PyDict_GetItemString(dict, "Up");
+  PyObject* py_down = PyDict_GetItemString(dict, "Down");
+  PyObject* py_left = PyDict_GetItemString(dict, "Left");
+  PyObject* py_right = PyDict_GetItemString(dict, "Right");
+  if (py_a != nullptr) set_bool(API::InputKey::WII_A, py_a);
+  if (py_b != nullptr) set_bool(API::InputKey::WII_B, py_b);
+  if (py_one != nullptr) set_bool(API::InputKey::WII_ONE, py_one);
+  if (py_two != nullptr) set_bool(API::InputKey::WII_TWO, py_two);
+  if (py_plus != nullptr) set_bool(API::InputKey::WII_PLUS, py_plus);
+  if (py_minus != nullptr) set_bool(API::InputKey::WII_MINUS, py_minus);
+  if (py_home != nullptr) set_bool(API::InputKey::WII_HOME, py_home);
+  if (py_up != nullptr) set_bool(API::InputKey::WII_UP, py_up);
+  if (py_down != nullptr) set_bool(API::InputKey::WII_DOWN, py_down);
+  if (py_left != nullptr) set_bool(API::InputKey::WII_LEFT, py_left);
+  if (py_right != nullptr) set_bool(API::InputKey::WII_RIGHT, py_right);
+
   Py_RETURN_NONE;
 }
 
-static PyObject* set_wii_ircamera_transform(PyObject* module, PyObject* args)
+static PyObject* get_wii_pointer(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue("(dd)", state->wii_manip->Get(controller_id, API::InputKey::WII_IR_X),
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_IR_Y));
+}
+
+static PyObject* set_wii_pointer(PyObject* module, PyObject* args)
 {
   int controller_id;
   float x, y;
-  float z = -2; // 2 meters away from sensor bar by default
-  float pitch, yaw, roll;
-  if (!PyArg_ParseTuple(args, "ifff|fff", &controller_id, &x, &y, &z, &pitch, &yaw, &roll))
+  if (!PyArg_ParseTuple(args, "iff", &controller_id, &x, &y))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_IR_X, x, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_IR_Y, y, API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_acceleration(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue("(ddd)", state->wii_manip->Get(controller_id, API::InputKey::WII_ACCELERATION_X),
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_ACCELERATION_Y),
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_ACCELERATION_Z));
+}
+
+static PyObject* set_wii_acceleration(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  float x, y, z;
+  if (!PyArg_ParseTuple(args, "ifff", &controller_id, &x, &y, &z))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_ACCELERATION_X, x, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_ACCELERATION_Y, y, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_ACCELERATION_Z, z, API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_angular_velocity(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue("(ddd)",
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_X),
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_Y),
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_Z));
+}
+
+static PyObject* set_wii_angular_velocity(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  float x, y, z;
+  if (!PyArg_ParseTuple(args, "ifff", &controller_id, &x, &y, &z))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_X, x, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_Y, y, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_Z, z, API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_classic_buttons(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  const auto get_bool = [&](const API::InputKey& input_key) {
+    return state->wii_classic_manip->Get(controller_id, input_key) != 0 ? Py_True : Py_False;
+  };
+  const auto get_analog = [&](const API::InputKey& input_key) {
+    return state->wii_classic_manip->Get(controller_id, input_key);
+  };
+
+  return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,"
+                       "s:d,s:d,s:d,s:d,s:d,s:d}",
+    "A", get_bool(API::InputKey::WII_CLASSIC_A),
+    "B", get_bool(API::InputKey::WII_CLASSIC_B),
+    "X", get_bool(API::InputKey::WII_CLASSIC_X),
+    "Y", get_bool(API::InputKey::WII_CLASSIC_Y),
+    "ZL", get_bool(API::InputKey::WII_CLASSIC_ZL),
+    "ZR", get_bool(API::InputKey::WII_CLASSIC_ZR),
+    "Plus", get_bool(API::InputKey::WII_CLASSIC_PLUS),
+    "Minus", get_bool(API::InputKey::WII_CLASSIC_MINUS),
+    "Home", get_bool(API::InputKey::WII_CLASSIC_HOME),
+    "Up", get_bool(API::InputKey::WII_CLASSIC_UP),
+    "Down", get_bool(API::InputKey::WII_CLASSIC_DOWN),
+    "Left", get_bool(API::InputKey::WII_CLASSIC_LEFT),
+    "Right", get_bool(API::InputKey::WII_CLASSIC_RIGHT),
+    "L", get_bool(API::InputKey::WII_CLASSIC_L),
+    "R", get_bool(API::InputKey::WII_CLASSIC_R),
+    "TriggerLeft", get_analog(API::InputKey::WII_CLASSIC_L_ANALOG),
+    "TriggerRight", get_analog(API::InputKey::WII_CLASSIC_R_ANALOG),
+    "LeftStickX", get_analog(API::InputKey::WII_CLASSIC_LEFT_STICK_X),
+    "LeftStickY", get_analog(API::InputKey::WII_CLASSIC_LEFT_STICK_Y),
+    "RightStickX", get_analog(API::InputKey::WII_CLASSIC_RIGHT_STICK_X),
+    "RightStickY", get_analog(API::InputKey::WII_CLASSIC_RIGHT_STICK_Y)
+  );
+}
+
+static PyObject* set_wii_classic_buttons(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  PyObject* dict;
+  if (!PyArg_ParseTuple(args, "iO!", &controller_id, &PyDict_Type, &dict))
+    return nullptr;
+
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+
+  const auto set_bool = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->wii_classic_manip->Set(controller_id, input_key, PyObject_IsTrue(py_object) ? 1 : 0,
+                                  API::ClearOn::NextFrame);
+  };
+  const auto set_analog = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->wii_classic_manip->Set(controller_id, input_key, PyFloat_AsDouble(py_object),
+                                  API::ClearOn::NextFrame);
+  };
+
+  PyObject* py_a = PyDict_GetItemString(dict, "A");
+  PyObject* py_b = PyDict_GetItemString(dict, "B");
+  PyObject* py_x = PyDict_GetItemString(dict, "X");
+  PyObject* py_y = PyDict_GetItemString(dict, "Y");
+  PyObject* py_zl = PyDict_GetItemString(dict, "ZL");
+  PyObject* py_zr = PyDict_GetItemString(dict, "ZR");
+  PyObject* py_plus = PyDict_GetItemString(dict, "Plus");
+  PyObject* py_minus = PyDict_GetItemString(dict, "Minus");
+  PyObject* py_home = PyDict_GetItemString(dict, "Home");
+  PyObject* py_up = PyDict_GetItemString(dict, "Up");
+  PyObject* py_down = PyDict_GetItemString(dict, "Down");
+  PyObject* py_left = PyDict_GetItemString(dict, "Left");
+  PyObject* py_right = PyDict_GetItemString(dict, "Right");
+  PyObject* py_l = PyDict_GetItemString(dict, "L");
+  PyObject* py_r = PyDict_GetItemString(dict, "R");
+  PyObject* py_trigger_l = PyDict_GetItemString(dict, "TriggerLeft");
+  PyObject* py_trigger_r = PyDict_GetItemString(dict, "TriggerRight");
+  PyObject* py_left_stick_x = PyDict_GetItemString(dict, "LeftStickX");
+  PyObject* py_left_stick_y = PyDict_GetItemString(dict, "LeftStickY");
+  PyObject* py_right_stick_x = PyDict_GetItemString(dict, "RightStickX");
+  PyObject* py_right_stick_y = PyDict_GetItemString(dict, "RightStickY");
+  if (py_a != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_A, py_a);
+  if (py_b != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_B, py_b);
+  if (py_x != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_X, py_x);
+  if (py_y != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_Y, py_y);
+  if (py_zl != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_ZL, py_zl);
+  if (py_zr != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_ZR, py_zr);
+  if (py_plus != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_PLUS, py_plus);
+  if (py_minus != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_MINUS, py_minus);
+  if (py_home != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_HOME, py_home);
+  if (py_up != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_UP, py_up);
+  if (py_down != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_DOWN, py_down);
+  if (py_left != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_LEFT, py_left);
+  if (py_right != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_RIGHT, py_right);
+  if (py_l != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_L, py_l);
+  if (py_r != nullptr)
+    set_bool(API::InputKey::WII_CLASSIC_R, py_r);
+  if (py_trigger_l != nullptr)
+    set_analog(API::InputKey::WII_CLASSIC_L_ANALOG, py_trigger_l);
+  if (py_trigger_r != nullptr)
+    set_analog(API::InputKey::WII_CLASSIC_R_ANALOG, py_trigger_r);
+  if (py_left_stick_x != nullptr)
+    set_analog(API::InputKey::WII_CLASSIC_LEFT_STICK_X, py_left_stick_x);
+  if (py_left_stick_y != nullptr)
+    set_analog(API::InputKey::WII_CLASSIC_LEFT_STICK_Y, py_left_stick_y);
+  if (py_right_stick_x != nullptr)
+    set_analog(API::InputKey::WII_CLASSIC_RIGHT_STICK_X, py_right_stick_x);
+  if (py_right_stick_y != nullptr)
+    set_analog(API::InputKey::WII_CLASSIC_RIGHT_STICK_Y, py_right_stick_y);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_nunchuk_buttons(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  const auto get_bool = [&](const API::InputKey& input_key) {
+    return state->wii_nunchuk_manip->Get(controller_id, input_key) != 0 ? Py_True : Py_False;
+  };
+  const auto get_analog = [&](const API::InputKey& input_key) {
+    return state->wii_nunchuk_manip->Get(controller_id, input_key);
+  };
+
+  return Py_BuildValue("{s:O,s:O,s:d,s:d}",
+    "C", get_bool(API::InputKey::WII_NUNCHUK_C),
+    "Z", get_bool(API::InputKey::WII_NUNCHUK_Z),
+    "StickX", get_analog(API::InputKey::WII_NUNCHUK_STICK_X),
+    "StickY", get_analog(API::InputKey::WII_NUNCHUK_STICK_Y)
+  );
+}
+
+static PyObject* set_wii_nunchuk_buttons(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  PyObject* dict;
+  if (!PyArg_ParseTuple(args, "iO!", &controller_id, &PyDict_Type, &dict))
+    return nullptr;
+
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+
+  const auto set_bool = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->wii_nunchuk_manip->Set(controller_id, input_key, PyObject_IsTrue(py_object) ? 1 : 0,
+                                  API::ClearOn::NextFrame);
+  };
+
+  PyObject* py_c = PyDict_GetItemString(dict, "C");
+  PyObject* py_z = PyDict_GetItemString(dict, "Z");
+  PyObject* py_stick_x = PyDict_GetItemString(dict, "StickX");
+  PyObject* py_stick_y = PyDict_GetItemString(dict, "StickY");
+  if (py_c != nullptr)
+    set_bool(API::InputKey::WII_NUNCHUK_C, py_c);
+  if (py_z != nullptr)
+    set_bool(API::InputKey::WII_NUNCHUK_Z, py_z);
+  if (py_stick_x != nullptr)
+    set_bool(API::InputKey::WII_NUNCHUK_STICK_X, py_stick_x);
+  if (py_stick_y != nullptr)
+    set_bool(API::InputKey::WII_NUNCHUK_STICK_Y, py_stick_y);
+
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_nunchuk_acceleration(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue(
+      "(ddd)",
+      state->wii_nunchuk_manip->Get(controller_id, API::InputKey::WII_NUNCHUCK_ACCELERATION_X),
+      state->wii_nunchuk_manip->Get(controller_id, API::InputKey::WII_NUNCHUCK_ACCELERATION_Y),
+      state->wii_nunchuk_manip->Get(controller_id, API::InputKey::WII_NUNCHUCK_ACCELERATION_Z));
+}
+
+static PyObject* set_wii_nunchuk_acceleration(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  float x, y, z;
+  if (!PyArg_ParseTuple(args, "ifff", &controller_id, &x, &y, &z))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::WII_NUNCHUCK_ACCELERATION_X, x,
+                                API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::WII_NUNCHUCK_ACCELERATION_Y, y,
+                                API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::WII_NUNCHUCK_ACCELERATION_Z, z,
+                                API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_gba_buttons(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  const auto get_bool = [&](const API::InputKey& input_key) {
+    return state->gba_manip->Get(controller_id, input_key) != 0 ? Py_True : Py_False;
+  };
+  return Py_BuildValue("{s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:O}",
+    "A", get_bool(API::InputKey::GBA_A),
+    "B", get_bool(API::InputKey::GBA_B),
+    "L", get_bool(API::InputKey::GBA_L),
+    "R", get_bool(API::InputKey::GBA_R),
+    "Start", get_bool(API::InputKey::GBA_START),
+    "Select", get_bool(API::InputKey::GBA_SELECT),
+    "Up", get_bool(API::InputKey::GBA_UP),
+    "Down", get_bool(API::InputKey::GBA_DOWN),
+    "Left", get_bool(API::InputKey::GBA_LEFT),
+    "Right", get_bool(API::InputKey::GBA_RIGHT));
+}
+
+static PyObject* set_gba_buttons(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  PyObject* dict;
+  if (!PyArg_ParseTuple(args, "iO!", &controller_id, &PyDict_Type, &dict))
     return nullptr;
   const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
 
-  state->wii_ir_manip->Set({{x, y, z}, {pitch, yaw, roll}}, controller_id, API::ClearOn::NextFrame);
+  constexpr auto clear_on = API::ClearOn::NextFrame;
+  const auto set_bool = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->gba_manip->Set(controller_id, input_key, PyObject_IsTrue(py_object) ? 1 : 0, clear_on);
+  };
+
+  PyObject* py_button_a = PyDict_GetItemString(dict, "A");
+  PyObject* py_button_b = PyDict_GetItemString(dict, "B");
+  PyObject* py_button_l = PyDict_GetItemString(dict, "L");
+  PyObject* py_button_r = PyDict_GetItemString(dict, "R");
+  PyObject* py_button_start = PyDict_GetItemString(dict, "Start");
+  PyObject* py_button_select = PyDict_GetItemString(dict, "Select");
+  PyObject* py_button_up = PyDict_GetItemString(dict, "Up");
+  PyObject* py_button_down = PyDict_GetItemString(dict, "Down");
+  PyObject* py_button_left = PyDict_GetItemString(dict, "Left");
+  PyObject* py_button_right = PyDict_GetItemString(dict, "Right");
+  if (py_button_a != nullptr)
+    set_bool(API::InputKey::GBA_A, py_button_a);
+  if (py_button_b != nullptr)
+    set_bool(API::InputKey::GBA_B, py_button_b);
+  if (py_button_l != nullptr)
+    set_bool(API::InputKey::GBA_L, py_button_l);
+  if (py_button_r != nullptr)
+    set_bool(API::InputKey::GBA_R, py_button_r);
+  if (py_button_start != nullptr)
+    set_bool(API::InputKey::GBA_START, py_button_start);
+  if (py_button_select != nullptr)
+    set_bool(API::InputKey::GBA_START, py_button_select);
+  if (py_button_up != nullptr)
+    set_bool(API::InputKey::GBA_UP, py_button_up);
+  if (py_button_down != nullptr)
+    set_bool(API::InputKey::GBA_DOWN, py_button_down);
+  if (py_button_left != nullptr)
+    set_bool(API::InputKey::GBA_LEFT, py_button_left);
+  if (py_button_right != nullptr)
+    set_bool(API::InputKey::GBA_RIGHT, py_button_right);
+
   Py_RETURN_NONE;
 }
 
 static void setup_controller_module(PyObject* module, ControllerModuleState* state)
 {
   state->gc_manip = PyScriptingBackend::GetCurrent()->GetGCManip();
-  state->wii_buttons_manip = PyScriptingBackend::GetCurrent()->GetWiiButtonsManip();
-  state->wii_ir_manip = PyScriptingBackend::GetCurrent()->GetWiiIRManip();
+  state->wii_manip = PyScriptingBackend::GetCurrent()->GetWiiManip();
+  state->wii_classic_manip = PyScriptingBackend::GetCurrent()->GetWiiClassicManip();
+  state->wii_nunchuk_manip = PyScriptingBackend::GetCurrent()->GetWiiNunchukManip();
+  state->gba_manip = PyScriptingBackend::GetCurrent()->GetGBAManip();
   PyScriptingBackend::GetCurrent()->AddCleanupFunc([state] {
     state->gc_manip->Clear();
-    state->wii_buttons_manip->Clear();
-    state->wii_ir_manip->Clear();
+    state->wii_manip->Clear();
+    state->wii_classic_manip->Clear();
+    state->wii_nunchuk_manip->Clear();
+    state->gba_manip->Clear();
   });
 }
 
@@ -235,7 +553,20 @@ PyMODINIT_FUNC PyInit_controller()
       {"set_gc_buttons", set_gc_buttons, METH_VARARGS, ""},
       {"get_wii_buttons", get_wii_buttons, METH_VARARGS, ""},
       {"set_wii_buttons", set_wii_buttons, METH_VARARGS, ""},
-      {"set_wii_ircamera_transform", set_wii_ircamera_transform, METH_VARARGS, ""},
+      {"get_wii_pointer", get_wii_pointer, METH_VARARGS, ""},
+      {"set_wii_pointer", set_wii_pointer, METH_VARARGS, ""},
+      {"get_wii_acceleration", get_wii_acceleration, METH_VARARGS, ""},
+      {"set_wii_acceleration", set_wii_acceleration, METH_VARARGS, ""},
+      {"get_wii_angular_velocity", get_wii_angular_velocity, METH_VARARGS, ""},
+      {"set_wii_angular_velocity", set_wii_angular_velocity, METH_VARARGS, ""},
+      {"get_wii_classic_buttons", get_wii_classic_buttons, METH_VARARGS, ""},
+      {"set_wii_classic_buttons", set_wii_classic_buttons, METH_VARARGS, ""},
+      {"get_wii_nunchuk_buttons", get_wii_nunchuk_buttons, METH_VARARGS, ""},
+      {"set_wii_nunchuk_buttons", set_wii_nunchuk_buttons, METH_VARARGS, ""},
+      {"get_wii_nunchuk_acceleration", get_wii_nunchuk_acceleration, METH_VARARGS, ""},
+      {"set_wii_nunchuk_acceleration", set_wii_nunchuk_acceleration, METH_VARARGS, ""},
+      {"get_gba_buttons", get_gba_buttons, METH_VARARGS, ""},
+      {"set_gba_buttons", set_gba_buttons, METH_VARARGS, ""},
       {nullptr, nullptr, 0, nullptr}  // Sentinel
   };
   static PyModuleDef module_def =

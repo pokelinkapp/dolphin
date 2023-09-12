@@ -111,10 +111,11 @@ static void ShutdownMainPythonInterpreter()
 
 PyScriptingBackend::PyScriptingBackend(std::filesystem::path script_filepath,
                                        API::EventHub& event_hub, API::Gui& gui,
-                                       API::GCManip& gc_manip, API::WiiButtonsManip& wii_buttons_manip,
-                                       API::WiiIRManip& wii_ir_manip)
-    : m_event_hub(event_hub), m_gui(gui), m_gc_manip(gc_manip), m_wii_buttons_manip(wii_buttons_manip),
-      m_wii_ir_manip(wii_ir_manip)
+                                       API::BaseManip& gc_manip, API::BaseManip& wii_manip,
+                                       API::BaseManip& wii_classic_manip, API::BaseManip& wii_nunchuk_manip,
+                                       API::BaseManip& gba_manip)
+    : m_event_hub(event_hub), m_gui(gui), m_gc_manip(gc_manip), m_wii_manip(wii_manip),
+    m_wii_classic_manip(wii_classic_manip), m_wii_nunchuk_manip(wii_nunchuk_manip), m_gba_manip(gba_manip)
 {
   std::lock_guard lock{s_bookkeeping_lock};
   if (s_instances.empty())
@@ -250,19 +251,29 @@ API::Gui* PyScriptingBackend::GetGui()
   return &m_gui;
 }
 
-API::GCManip* PyScriptingBackend::GetGCManip()
+API::BaseManip* PyScriptingBackend::GetGCManip()
 {
   return &m_gc_manip;
 }
 
-API::WiiButtonsManip* PyScriptingBackend::GetWiiButtonsManip()
+API::BaseManip* PyScriptingBackend::GetWiiManip()
 {
-  return &m_wii_buttons_manip;
+  return &m_wii_manip;
 }
 
-API::WiiIRManip* PyScriptingBackend::GetWiiIRManip()
+API::BaseManip* PyScriptingBackend::GetWiiClassicManip()
 {
-  return &m_wii_ir_manip;
+  return &m_wii_classic_manip;
+}
+
+API::BaseManip* PyScriptingBackend::GetWiiNunchukManip()
+{
+  return &m_wii_nunchuk_manip;
+}
+
+API::BaseManip* PyScriptingBackend::GetGBAManip()
+{
+  return &m_gba_manip;
 }
 
 void PyScriptingBackend::AddCleanupFunc(std::function<void()> cleanup_func)

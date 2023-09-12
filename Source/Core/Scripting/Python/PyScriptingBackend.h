@@ -20,14 +20,17 @@ class PyScriptingBackend
 {
 public:
   PyScriptingBackend(std::filesystem::path script_filepath, API::EventHub& event_hub, API::Gui& gui,
-                     API::GCManip& gc_manip, API::WiiButtonsManip& wii_buttons_manip, API::WiiIRManip& wii_ir_manip);
+                     API::BaseManip& gc_manip, API::BaseManip& wii_manip, API::BaseManip& wii_classic_manip,
+                     API::BaseManip& wii_nunchuk_manip, API::BaseManip& gba_manip);
   ~PyScriptingBackend();
   static PyScriptingBackend* GetCurrent();
   API::EventHub* GetEventHub();
   API::Gui* GetGui();
-  API::GCManip* GetGCManip();
-  API::WiiButtonsManip* GetWiiButtonsManip();
-  API::WiiIRManip* GetWiiIRManip();
+  API::BaseManip* GetGCManip();
+  API::BaseManip* GetWiiManip();
+  API::BaseManip* GetWiiClassicManip();
+  API::BaseManip* GetWiiNunchukManip();
+  API::BaseManip* GetGBAManip();
   void AddCleanupFunc(std::function<void()> cleanup_func);
 
   // this class somewhat is a wrapper around a python interpreter state,
@@ -47,9 +50,11 @@ private:
   PyThreadState* m_interp_threadstate;
   API::EventHub& m_event_hub;
   API::Gui& m_gui;
-  API::GCManip& m_gc_manip;
-  API::WiiButtonsManip& m_wii_buttons_manip;
-  API::WiiIRManip& m_wii_ir_manip;
+  API::BaseManip& m_gc_manip;
+  API::BaseManip& m_wii_manip;
+  API::BaseManip& m_wii_classic_manip;
+  API::BaseManip& m_wii_nunchuk_manip;
+  API::BaseManip& m_gba_manip;
   std::vector<std::function<void()>> m_cleanups;
 };
 

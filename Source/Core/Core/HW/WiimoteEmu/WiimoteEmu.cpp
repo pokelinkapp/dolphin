@@ -19,7 +19,6 @@
 #include "Common/MathUtil.h"
 #include "Common/MsgHandler.h"
 
-#include "Core/API/Controller.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Config/SYSCONFSettings.h"
 #include "Core/ConfigManager.h"
@@ -631,9 +630,6 @@ void Wiimote::SendDataReport(const DesiredWiimoteState& target_state)
         std::fill_n(ext_data, ext_size, u8(0xff));
       }
     }
-
-      API::GetWiiButtonsManip().PerformInputManip(rpt_builder, m_index);
-      API::GetWiiIRManip().PerformInputManip(rpt_builder, m_index);
   }
 
   Movie::CheckWiimoteStatus(m_bt_device_index, rpt_builder, m_active_extension,
