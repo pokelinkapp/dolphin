@@ -10,13 +10,21 @@
 #include <vector>
 
 #include "Common/CommonTypes.h"
-#include "Common/DebugInterface.h"
 #include "Common/Logging/Log.h"
 #include "Core/API/Events.h"
 #include "Core/Core.h"
+#include "Core/Debugger/DebugInterface.h"
 #include "Core/PowerPC/Expression.h"
 #include "Core/PowerPC/JitInterface.h"
 #include "Core/PowerPC/MMU.h"
+#include "Core/PowerPC/PowerPC.h"
+#include "Core/System.h"
+
+BreakPoints::BreakPoints(Core::System& system) : m_system(system)
+{
+}
+
+BreakPoints::~BreakPoints() = default;
 
 bool BreakPoints::IsAddressBreakPoint(u32 address) const
 {
@@ -41,7 +49,7 @@ const TBreakPoint* BreakPoints::GetBreakpoint(u32 address) const
 {
   API::GetEventHub().EmitEvent(API::Events::CodeBreakpoint{address});
   auto bp = std::find_if(m_breakpoints.begin(), m_breakpoints.end(),
-                         [address](const auto& bp) { return bp.address == address; });
+                         [address](const auto& bp_) { return bp_.address == address; });
 
   if (bp == m_breakpoints.end())
     return nullptr;
@@ -107,7 +115,7 @@ void BreakPoints::Add(TBreakPoint bp)
   if (IsAddressBreakPoint(bp.address))
     return;
 
-  JitInterface::InvalidateICache(bp.address, 4, true);
+  m_system.GetJitInterface().InvalidateICache(bp.address, 4, true);
 
   m_breakpoints.emplace_back(std::move(bp));
 }
@@ -143,7 +151,7 @@ void BreakPoints::Add(u32 address, bool temp, bool break_on_hit, bool log_on_hit
     m_breakpoints.emplace_back(std::move(bp));
   }
 
-  JitInterface::InvalidateICache(address, 4, true);
+  m_system.GetJitInterface().InvalidateICache(address, 4, true);
 }
 
 bool BreakPoints::ToggleBreakPoint(u32 address)
@@ -167,14 +175,14 @@ void BreakPoints::Remove(u32 address)
     return;
 
   m_breakpoints.erase(iter);
-  JitInterface::InvalidateICache(address, 4, true);
+  m_system.GetJitInterface().InvalidateICache(address, 4, true);
 }
 
 void BreakPoints::Clear()
 {
   for (const TBreakPoint& bp : m_breakpoints)
   {
-    JitInterface::InvalidateICache(bp.address, 4, true);
+    m_system.GetJitInterface().InvalidateICache(bp.address, 4, true);
   }
 
   m_breakpoints.clear();
@@ -187,7 +195,7 @@ void BreakPoints::ClearAllTemporary()
   {
     if (bp->is_temporary)
     {
-      JitInterface::InvalidateICache(bp->address, 4, true);
+      m_system.GetJitInterface().InvalidateICache(bp->address, 4, true);
       bp = m_breakpoints.erase(bp);
     }
     else
@@ -196,6 +204,12 @@ void BreakPoints::ClearAllTemporary()
     }
   }
 }
+
+MemChecks::MemChecks(Core::System& system) : m_system(system)
+{
+}
+
+MemChecks::~MemChecks() = default;
 
 MemChecks::TMemChecksStr MemChecks::GetStrings() const
 {
@@ -280,8 +294,8 @@ void MemChecks::Add(TMemCheck memory_check)
     // If this is the first one, clear the JIT cache so it can switch to
     // watchpoint-compatible code.
     if (!had_any)
-      JitInterface::ClearCache();
-    PowerPC::DBATUpdated();
+      m_system.GetJitInterface().ClearCache();
+    m_system.GetMMU().DBATUpdated();
   });
 }
 
@@ -309,8 +323,8 @@ void MemChecks::Remove(u32 address)
   Core::RunAsCPUThread([&] {
     m_mem_checks.erase(iter);
     if (!HasAny())
-      JitInterface::ClearCache();
-    PowerPC::DBATUpdated();
+      m_system.GetJitInterface().ClearCache();
+    m_system.GetMMU().DBATUpdated();
   });
 }
 
@@ -318,8 +332,8 @@ void MemChecks::Clear()
 {
   Core::RunAsCPUThread([&] {
     m_mem_checks.clear();
-    JitInterface::ClearCache();
-    PowerPC::DBATUpdated();
+    m_system.GetJitInterface().ClearCache();
+    m_system.GetMMU().DBATUpdated();
   });
 }
 
@@ -353,15 +367,15 @@ bool MemChecks::OverlapsMemcheck(u32 address, u32 length) const
   });
 }
 
-bool TMemCheck::Action(Common::DebugInterface* debug_interface, u64 value, u32 addr, bool write,
-                       size_t size, u32 pc)
+bool TMemCheck::Action(Core::System& system, Core::DebugInterface* debug_interface, u64 value,
+                       u32 addr, bool write, size_t size, u32 pc)
 {
   if (!is_enabled)
     return false;
 
   API::GetEventHub().EmitEvent(API::Events::MemoryBreakpoint{write, addr, value});
   if (((write && is_break_on_write) || (!write && is_break_on_read)) &&
-      EvaluateCondition(this->condition))
+      EvaluateCondition(system, this->condition))
   {
     if (log_on_hit)
     {

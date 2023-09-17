@@ -22,7 +22,11 @@
 class JitArm64 : public JitBase, public Arm64Gen::ARM64CodeBlock, public CommonAsmRoutinesBase
 {
 public:
-  JitArm64();
+  explicit JitArm64(Core::System& system);
+  JitArm64(const JitArm64&) = delete;
+  JitArm64(JitArm64&&) = delete;
+  JitArm64& operator=(const JitArm64&) = delete;
+  JitArm64& operator=(JitArm64&&) = delete;
   ~JitArm64() override;
 
   void Init() override;
@@ -32,8 +36,7 @@ public:
   bool IsInCodeSpace(const u8* ptr) const { return IsInSpace(ptr); }
   bool HandleFault(uintptr_t access_address, SContext* ctx) override;
   void DoBacktrace(uintptr_t access_address, SContext* ctx);
-  bool HandleStackFault() override;
-  bool HandleFastmemFault(uintptr_t access_address, SContext* ctx);
+  bool HandleFastmemFault(SContext* ctx);
 
   void ClearCache() override;
 
@@ -190,6 +193,9 @@ protected:
     const u8* slowmem_code;
   };
 
+  void SetBlockLinkingEnabled(bool enabled);
+  void SetOptimizationEnabled(bool enabled);
+
   void CompileInstruction(PPCAnalyst::CodeOp& op);
 
   bool HandleFunctionHooking(u32 address);
@@ -276,6 +282,8 @@ protected:
 
   bool DoJit(u32 em_address, JitBlock* b, u32 nextPC);
 
+  void Trace();
+
   // Finds a free memory region and sets the near and far code emitters to point at that region.
   // Returns false if no free memory region can be found for either of the two.
   bool SetEmitterStateToFreeCodeRegion();
@@ -283,8 +291,6 @@ protected:
   void DoDownCount();
   void Cleanup();
   void ResetStack();
-  void AllocStack();
-  void FreeStack();
 
   void ResetFreeMemoryRanges();
 
@@ -305,9 +311,16 @@ protected:
   void BeginTimeProfile(JitBlock* b);
   void EndTimeProfile(JitBlock* b);
 
+  void EmitUpdateMembase();
+  void EmitStoreMembase(const Arm64Gen::ARM64Reg& msr);
+
   // Exits
-  void WriteExit(u32 destination, bool LK = false, u32 exit_address_after_return = 0);
-  void WriteExit(Arm64Gen::ARM64Reg dest, bool LK = false, u32 exit_address_after_return = 0);
+  void
+  WriteExit(u32 destination, bool LK = false, u32 exit_address_after_return = 0,
+            Arm64Gen::ARM64Reg exit_address_after_return_reg = Arm64Gen::ARM64Reg::INVALID_REG);
+  void
+  WriteExit(Arm64Gen::ARM64Reg dest, bool LK = false, u32 exit_address_after_return = 0,
+            Arm64Gen::ARM64Reg exit_address_after_return_reg = Arm64Gen::ARM64Reg::INVALID_REG);
   void WriteExceptionExit(u32 destination, bool only_external = false,
                           bool always_exception = false);
   void WriteExceptionExit(Arm64Gen::ARM64Reg dest, bool only_external = false,
@@ -316,7 +329,9 @@ protected:
   void WriteConditionalExceptionExit(int exception, Arm64Gen::ARM64Reg temp_gpr,
                                      Arm64Gen::ARM64Reg temp_fpr = Arm64Gen::ARM64Reg::INVALID_REG,
                                      u64 increment_sp_on_exit = 0);
-  void FakeLKExit(u32 exit_address_after_return);
+  void
+  FakeLKExit(u32 exit_address_after_return,
+             Arm64Gen::ARM64Reg exit_address_after_return_reg = Arm64Gen::ARM64Reg::INVALID_REG);
   void WriteBLRExit(Arm64Gen::ARM64Reg dest);
 
   Arm64Gen::FixupBranch JumpIfCRFieldBit(int field, int bit, bool jump_if_set);
@@ -342,7 +357,7 @@ protected:
   void Force25BitPrecision(Arm64Gen::ARM64Reg output, Arm64Gen::ARM64Reg input);
 
   // <Fastmem fault location, slowmem handler location>
-  std::map<const u8*, FastmemArea> m_fault_to_handler;
+  std::map<const u8*, FastmemArea> m_fault_to_handler{};
   Arm64GPRCache gpr;
   Arm64FPRCache fpr;
 
@@ -354,15 +369,9 @@ protected:
   bool m_in_far_code = false;
 
   // Backed up when we switch to far code.
-  u8* m_near_code;
-  u8* m_near_code_end;
-  bool m_near_code_write_failed;
-
-  bool m_enable_blr_optimization;
-  bool m_cleanup_after_stackfault = false;
-  u8* m_stack_base = nullptr;
-  u8* m_stack_pointer = nullptr;
-  u8* m_saved_stack_pointer = nullptr;
+  u8* m_near_code = nullptr;
+  u8* m_near_code_end = nullptr;
+  bool m_near_code_write_failed = false;
 
   HyoutaUtilities::RangeSizeSet<u8*> m_free_ranges_near;
   HyoutaUtilities::RangeSizeSet<u8*> m_free_ranges_far;

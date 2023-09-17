@@ -33,6 +33,7 @@
 #include "DolphinQt/Config/Mapping/MappingWindow.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
 #include "DolphinQt/QtUtils/NonDefaultQPushButton.h"
+#include "DolphinQt/QtUtils/SetWindowDecorations.h"
 #include "DolphinQt/QtUtils/SignalBlocking.h"
 #include "DolphinQt/Settings.h"
 
@@ -48,6 +49,11 @@ WiimoteControllersWidget::WiimoteControllersWidget(QWidget* parent) : QWidget(pa
   connect(&Settings::Instance(), &Settings::EmulationStateChanged, this,
           [this](Core::State state) { LoadSettings(state); });
   LoadSettings(Core::GetState());
+}
+
+void WiimoteControllersWidget::UpdateBluetoothAvailableStatus()
+{
+  m_bluetooth_unavailable->setHidden(WiimoteReal::IsScannerReady());
 }
 
 static int GetRadioButtonIndicatorWidth()
@@ -151,6 +157,10 @@ void WiimoteControllersWidget::CreateLayout()
   m_wiimote_layout->addWidget(m_wiimote_continuous_scanning, continuous_scanning_row, 0, 1, 3);
   m_wiimote_layout->addWidget(m_wiimote_refresh, continuous_scanning_row, 3);
 
+  m_bluetooth_unavailable = new QLabel(tr("A supported Bluetooth device could not be found.\n"
+                                          "You must manually connect your Wii Remote."));
+  m_wiimote_layout->addWidget(m_bluetooth_unavailable, m_wiimote_layout->rowCount(), 1, 1, -1);
+
   auto* layout = new QVBoxLayout;
   layout->setContentsMargins(0, 0, 0, 0);
   layout->setAlignment(Qt::AlignTop);
@@ -252,6 +262,7 @@ void WiimoteControllersWidget::OnWiimoteConfigure(size_t index)
   MappingWindow* window = new MappingWindow(this, type, static_cast<int>(index));
   window->setAttribute(Qt::WA_DeleteOnClose, true);
   window->setWindowModality(Qt::WindowModality::WindowModal);
+  SetQWidgetWindowDecorations(window);
   window->show();
 }
 

@@ -1,11 +1,29 @@
 add_library(videocommon
   AbstractFramebuffer.cpp
   AbstractFramebuffer.h
+  AbstractGfx.cpp
+  AbstractGfx.h
   AbstractShader.h
   AbstractStagingTexture.cpp
   AbstractStagingTexture.h
   AbstractTexture.cpp
   AbstractTexture.h
+  Assets/CustomAsset.cpp
+  Assets/CustomAsset.h
+  Assets/CustomAssetLibrary.cpp
+  Assets/CustomAssetLibrary.h
+  Assets/CustomAssetLoader.cpp
+  Assets/CustomAssetLoader.h
+  Assets/CustomTextureData.cpp
+  Assets/CustomTextureData.h
+  Assets/DirectFilesystemAssetLibrary.cpp
+  Assets/DirectFilesystemAssetLibrary.h
+  Assets/MaterialAsset.cpp
+  Assets/MaterialAsset.h
+  Assets/ShaderAsset.cpp
+  Assets/ShaderAsset.h
+  Assets/TextureAsset.cpp
+  Assets/TextureAsset.h
   AsyncRequests.cpp
   AsyncRequests.h
   AsyncShaderCompiler.cpp
@@ -21,18 +39,23 @@ add_library(videocommon
   CommandProcessor.cpp
   CommandProcessor.h
   ConstantManager.h
+  Constants.h
   CPMemory.cpp
   CPMemory.h
+  CPUCull.cpp
+  CPUCull.h
+  CPUCullImpl.h
   DriverDetails.cpp
   DriverDetails.h
   Fifo.cpp
   Fifo.h
-  FPSCounter.cpp
-  FPSCounter.h
   FramebufferManager.cpp
   FramebufferManager.h
   FramebufferShaderGen.cpp
   FramebufferShaderGen.h
+  FrameDumper.cpp
+  FrameDumper.h
+  FrameDumpFFMpeg.h
   FreeLookCamera.cpp
   FreeLookCamera.h
   GeometryShaderGen.cpp
@@ -41,6 +64,8 @@ add_library(videocommon
   GeometryShaderManager.h
   GraphicsModSystem/Config/GraphicsMod.cpp
   GraphicsModSystem/Config/GraphicsMod.h
+  GraphicsModSystem/Config/GraphicsModAsset.cpp
+  GraphicsModSystem/Config/GraphicsModAsset.h
   GraphicsModSystem/Config/GraphicsModFeature.cpp
   GraphicsModSystem/Config/GraphicsModFeature.h
   GraphicsModSystem/Config/GraphicsModGroup.cpp
@@ -50,6 +75,8 @@ add_library(videocommon
   GraphicsModSystem/Config/GraphicsTargetGroup.cpp
   GraphicsModSystem/Config/GraphicsTargetGroup.h
   GraphicsModSystem/Constants.h
+  GraphicsModSystem/Runtime/Actions/CustomPipelineAction.cpp
+  GraphicsModSystem/Runtime/Actions/CustomPipelineAction.h
   GraphicsModSystem/Runtime/Actions/MoveAction.cpp
   GraphicsModSystem/Runtime/Actions/MoveAction.h
   GraphicsModSystem/Runtime/Actions/PrintAction.cpp
@@ -58,6 +85,8 @@ add_library(videocommon
   GraphicsModSystem/Runtime/Actions/ScaleAction.h
   GraphicsModSystem/Runtime/Actions/SkipAction.cpp
   GraphicsModSystem/Runtime/Actions/SkipAction.h
+  GraphicsModSystem/Runtime/CustomShaderCache.cpp
+  GraphicsModSystem/Runtime/CustomShaderCache.h
   GraphicsModSystem/Runtime/FBInfo.cpp
   GraphicsModSystem/Runtime/FBInfo.h
   GraphicsModSystem/Runtime/GraphicsModAction.h
@@ -68,7 +97,6 @@ add_library(videocommon
   GraphicsModSystem/Runtime/GraphicsModManager.h
   HiresTextures.cpp
   HiresTextures.h
-  HiresTextures_DDSLoader.cpp
   IndexGenerator.cpp
   IndexGenerator.h
   LightingShaderGen.cpp
@@ -81,10 +109,17 @@ add_library(videocommon
   NetPlayGolfUI.h
   OnScreenDisplay.cpp
   OnScreenDisplay.h
+  OnScreenUI.cpp
+  OnScreenUI.h
+  OnScreenUIKeyMap.h
   OpcodeDecoding.cpp
   OpcodeDecoding.h
   PerfQueryBase.cpp
   PerfQueryBase.h
+  PerformanceMetrics.cpp
+  PerformanceMetrics.h
+  PerformanceTracker.cpp
+  PerformanceTracker.h
   PixelEngine.cpp
   PixelEngine.h
   PixelShaderGen.cpp
@@ -93,6 +128,8 @@ add_library(videocommon
   PixelShaderManager.h
   PostProcessing.cpp
   PostProcessing.h
+  Present.cpp
+  Present.h
   RenderBase.cpp
   RenderBase.h
   RenderState.cpp
@@ -149,11 +186,14 @@ add_library(videocommon
   VertexShaderManager.h
   VideoBackendBase.cpp
   VideoBackendBase.h
+  VideoEvents.h
   VideoCommon.h
   VideoConfig.cpp
   VideoConfig.h
   VideoState.cpp
   VideoState.h
+  Widescreen.cpp
+  Widescreen.h
   XFMemory.cpp
   XFMemory.h
   XFStructs.cpp
@@ -165,9 +205,10 @@ PUBLIC
   core
 PRIVATE
   fmt::fmt
-  spng
+  spng::spng
   xxhash
   imgui
+  implot
   glslang
 )
 
@@ -191,8 +232,7 @@ endif()
 
 if(FFmpeg_FOUND)
   target_sources(videocommon PRIVATE
-    FrameDump.cpp
-    FrameDump.h
+    FrameDumpFFMpeg.cpp
   )
   target_link_libraries(videocommon PRIVATE
     FFmpeg::avcodec

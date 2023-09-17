@@ -7,6 +7,8 @@
 #include <locale>
 #include <sstream>
 
+#include <fmt/format.h>
+
 namespace Common::Debug
 {
 Watch::Watch(u32 address_, std::string name_, State is_enabled_)
@@ -62,6 +64,11 @@ void Watches::UpdateWatchName(std::size_t index, std::string name)
   m_watches[index].name = std::move(name);
 }
 
+void Watches::UpdateWatchLockedState(std::size_t index, bool locked)
+{
+  m_watches[index].locked = locked;
+}
+
 void Watches::EnableWatch(std::size_t index)
 {
   m_watches[index].is_enabled = Watch::State::Enabled;
@@ -102,13 +109,9 @@ void Watches::LoadFromStrings(const std::vector<std::string>& watches)
 std::vector<std::string> Watches::SaveToStrings() const
 {
   std::vector<std::string> watches;
+  watches.reserve(m_watches.size());
   for (const auto& watch : m_watches)
-  {
-    std::ostringstream ss;
-    ss.imbue(std::locale::classic());
-    ss << std::hex << watch.address << " " << watch.name;
-    watches.push_back(ss.str());
-  }
+    watches.emplace_back(fmt::format("{:x} {}", watch.address, watch.name));
   return watches;
 }
 

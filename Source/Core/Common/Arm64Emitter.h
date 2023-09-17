@@ -484,12 +484,14 @@ public:
       m_width = WidthSpecifier::Width64Bit;
       if (shift == 64)
         m_shift = 0;
+      m_extend = ExtendSpecifier::UXTX;
     }
     else
     {
       m_width = WidthSpecifier::Width32Bit;
       if (shift == 32)
         m_shift = 0;
+      m_extend = ExtendSpecifier::UXTW;
     }
   }
   ARM64Reg GetReg() const { return m_destReg; }
@@ -559,11 +561,11 @@ struct LogicalImm
     // pick the next sequence of ones. This ensures we get a complete element
     // that has not been cut-in-half due to rotation across the word boundary.
 
-    const int rotation = Common::CountTrailingZeros(value & (value + 1));
+    const int rotation = std::countr_zero(value & (value + 1));
     const u64 normalized = std::rotr(value, rotation);
 
-    const int element_size = Common::CountTrailingZeros(normalized & (normalized + 1));
-    const int ones = Common::CountTrailingZeros(~normalized);
+    const int element_size = std::countr_zero(normalized & (normalized + 1));
+    const int ones = std::countr_one(normalized);
 
     // Check the value is repeating; also ensures element size is a power of two.
 
@@ -578,8 +580,8 @@ struct LogicalImm
     // segment.
 
     r = static_cast<u8>((element_size - rotation) & (element_size - 1));
-    s = (((~element_size + 1) << 1) | (ones - 1)) & 0x3f;
-    n = (element_size >> 6) & 1;
+    s = static_cast<u8>((((~element_size + 1) << 1) | (ones - 1)) & 0x3f);
+    n = Common::ExtractBit<6>(element_size);
 
     valid = true;
   }
@@ -642,7 +644,7 @@ private:
   void EncodeAddressInst(u32 op, ARM64Reg Rd, s32 imm);
   void EncodeLoadStoreUnscaled(u32 size, u32 op, ARM64Reg Rt, ARM64Reg Rn, s32 imm);
 
-  FixupBranch WriteFixupBranch();
+  [[nodiscard]] FixupBranch WriteFixupBranch();
 
   template <typename T>
   void MOVI2RImpl(ARM64Reg Rd, T imm);
@@ -678,13 +680,13 @@ public:
 
   // FixupBranch branching
   void SetJumpTarget(FixupBranch const& branch);
-  FixupBranch CBZ(ARM64Reg Rt);
-  FixupBranch CBNZ(ARM64Reg Rt);
-  FixupBranch B(CCFlags cond);
-  FixupBranch TBZ(ARM64Reg Rt, u8 bit);
-  FixupBranch TBNZ(ARM64Reg Rt, u8 bit);
-  FixupBranch B();
-  FixupBranch BL();
+  [[nodiscard]] FixupBranch CBZ(ARM64Reg Rt);
+  [[nodiscard]] FixupBranch CBNZ(ARM64Reg Rt);
+  [[nodiscard]] FixupBranch B(CCFlags cond);
+  [[nodiscard]] FixupBranch TBZ(ARM64Reg Rt, u8 bit);
+  [[nodiscard]] FixupBranch TBNZ(ARM64Reg Rt, u8 bit);
+  [[nodiscard]] FixupBranch B();
+  [[nodiscard]] FixupBranch BL();
 
   // Compare and Branch
   void CBZ(ARM64Reg Rt, const void* ptr);

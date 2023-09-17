@@ -9,6 +9,7 @@
 #include <string>
 
 #include "Common/Common.h"
+#include "Common/Config/Config.h"
 
 #include "Core/HW/WiimoteCommon/WiimoteReport.h"
 
@@ -129,6 +130,9 @@ public:
   static constexpr const char* PLUS_BUTTON = "+";
   static constexpr const char* HOME_BUTTON = "Home";
 
+  static constexpr const char* UPRIGHT_OPTION = "Upright Wiimote";
+  static constexpr const char* SIDEWAYS_OPTION = "Sideways Wiimote";
+
   explicit Wiimote(unsigned int index);
   ~Wiimote();
 
@@ -164,6 +168,7 @@ public:
 
   // Active extension number is exposed for TAS.
   ExtensionNumber GetActiveExtensionNumber() const;
+  bool IsMotionPlusAttached() const;
 
   static Common::Vec3
   OverrideVec3(const ControllerEmu::ControlGroup* control_group, Common::Vec3 vec,
@@ -341,6 +346,6 @@ private:
 
   IMUCursorState m_imu_cursor_state;
 
-  size_t m_config_changed_callback_id;
+  Config::ConfigChangedCallbackID m_config_changed_callback_id;
 };
 }  // namespace WiimoteEmu

@@ -32,12 +32,14 @@
 #include "Core/HW/EXI/EXI.h"
 #include "Core/HW/GCMemcard/GCMemcard.h"
 #include "Core/NetPlayServer.h"
+#include "Core/System.h"
 
 #include "DolphinQt/Config/Mapping/MappingWindow.h"
 #include "DolphinQt/GCMemcardManager.h"
 #include "DolphinQt/QtUtils/DolphinFileDialog.h"
 #include "DolphinQt/QtUtils/ModalMessageBox.h"
 #include "DolphinQt/QtUtils/NonDefaultQPushButton.h"
+#include "DolphinQt/QtUtils/SetWindowDecorations.h"
 #include "DolphinQt/QtUtils/SignalBlocking.h"
 #include "DolphinQt/Settings.h"
 #include "DolphinQt/Settings/BroadbandAdapterSettingsDialog.h"
@@ -378,22 +380,32 @@ void GameCubePane::OnConfigPressed(ExpansionInterface::Slot slot)
     BrowseAGPRom(slot);
     return;
   case ExpansionInterface::EXIDeviceType::Microphone:
+  {
     // TODO: convert MappingWindow to use Slot?
-    MappingWindow(this, MappingWindow::Type::MAPPING_GC_MICROPHONE, static_cast<int>(slot)).exec();
+    MappingWindow dialog(this, MappingWindow::Type::MAPPING_GC_MICROPHONE, static_cast<int>(slot));
+    SetQWidgetWindowDecorations(&dialog);
+    dialog.exec();
     return;
+  }
   case ExpansionInterface::EXIDeviceType::Ethernet:
   {
-    BroadbandAdapterSettingsDialog(this, BroadbandAdapterSettingsDialog::Type::Ethernet).exec();
+    BroadbandAdapterSettingsDialog dialog(this, BroadbandAdapterSettingsDialog::Type::Ethernet);
+    SetQWidgetWindowDecorations(&dialog);
+    dialog.exec();
     return;
   }
   case ExpansionInterface::EXIDeviceType::EthernetXLink:
   {
-    BroadbandAdapterSettingsDialog(this, BroadbandAdapterSettingsDialog::Type::XLinkKai).exec();
+    BroadbandAdapterSettingsDialog dialog(this, BroadbandAdapterSettingsDialog::Type::XLinkKai);
+    SetQWidgetWindowDecorations(&dialog);
+    dialog.exec();
     return;
   }
   case ExpansionInterface::EXIDeviceType::EthernetBuiltIn:
   {
-    BroadbandAdapterSettingsDialog(this, BroadbandAdapterSettingsDialog::Type::BuiltIn).exec();
+    BroadbandAdapterSettingsDialog dialog(this, BroadbandAdapterSettingsDialog::Type::BuiltIn);
+    SetQWidgetWindowDecorations(&dialog);
+    dialog.exec();
     return;
   }
   default:
@@ -409,7 +421,7 @@ void GameCubePane::BrowseMemcard(ExpansionInterface::Slot slot)
   const QString filename = DolphinFileDialog::getSaveFileName(
       this, tr("Choose a file to open or create"),
       QString::fromStdString(File::GetUserPath(D_GCUSER_IDX)),
-      tr("GameCube Memory Cards (*.raw *.gcp)"), 0, QFileDialog::DontConfirmOverwrite);
+      tr("GameCube Memory Cards (*.raw *.gcp)"), nullptr, QFileDialog::DontConfirmOverwrite);
 
   if (!filename.isEmpty())
     SetMemcard(slot, filename);
@@ -496,7 +508,8 @@ bool GameCubePane::SetMemcard(ExpansionInterface::Slot slot, const QString& file
     {
       // ChangeDevice unplugs the device for 1 second, which means that games should notice that
       // the path has changed and thus the memory card contents have changed
-      ExpansionInterface::ChangeDevice(slot, ExpansionInterface::EXIDeviceType::MemoryCard);
+      Core::System::GetInstance().GetExpansionInterface().ChangeDevice(
+          slot, ExpansionInterface::EXIDeviceType::MemoryCard);
     }
   }
 
@@ -526,7 +539,7 @@ bool GameCubePane::SetGCIFolder(ExpansionInterface::Slot slot, const QString& pa
 
   std::string raw_path =
       WithUnifiedPathSeparators(QFileInfo(path).absoluteFilePath().toStdString());
-  while (StringEndsWith(raw_path, "/"))
+  while (raw_path.ends_with('/'))
     raw_path.pop_back();
 
   // The user might be attempting to reset this path to its default, check for this.
@@ -601,7 +614,8 @@ bool GameCubePane::SetGCIFolder(ExpansionInterface::Slot slot, const QString& pa
     {
       // ChangeDevice unplugs the device for 1 second, which means that games should notice that
       // the path has changed and thus the memory card contents have changed
-      ExpansionInterface::ChangeDevice(slot, ExpansionInterface::EXIDeviceType::MemoryCardFolder);
+      Core::System::GetInstance().GetExpansionInterface().ChangeDevice(
+          slot, ExpansionInterface::EXIDeviceType::MemoryCardFolder);
     }
   }
 
@@ -615,7 +629,7 @@ void GameCubePane::BrowseAGPRom(ExpansionInterface::Slot slot)
 
   QString filename = DolphinFileDialog::getSaveFileName(
       this, tr("Choose a file to open"), QString::fromStdString(File::GetUserPath(D_GCUSER_IDX)),
-      tr("Game Boy Advance Carts (*.gba)"), 0, QFileDialog::DontConfirmOverwrite);
+      tr("Game Boy Advance Carts (*.gba)"), nullptr, QFileDialog::DontConfirmOverwrite);
 
   if (!filename.isEmpty())
     SetAGPRom(slot, filename);
@@ -637,7 +651,8 @@ void GameCubePane::SetAGPRom(ExpansionInterface::Slot slot, const QString& filen
     // cartridge without unplugging it, and it's not clear if the AGP software actually notices
     // that it's been unplugged or the cartridge has changed, but this was done for memcards so
     // we might as well do it for the AGP too.
-    ExpansionInterface::ChangeDevice(slot, ExpansionInterface::EXIDeviceType::AGP);
+    Core::System::GetInstance().GetExpansionInterface().ChangeDevice(
+        slot, ExpansionInterface::EXIDeviceType::AGP);
   }
 
   LoadSettings();
@@ -761,7 +776,7 @@ void GameCubePane::SaveSettings()
 
     if (Core::IsRunning() && current_exi_device != dev)
     {
-      ExpansionInterface::ChangeDevice(slot, dev);
+      Core::System::GetInstance().GetExpansionInterface().ChangeDevice(slot, dev);
     }
 
     Config::SetBaseOrCurrent(Config::GetInfoForEXIDevice(slot), dev);

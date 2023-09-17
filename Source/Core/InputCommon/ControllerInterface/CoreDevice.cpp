@@ -162,15 +162,12 @@ void Device::AddCombinedInput(std::string name, const std::pair<std::string, std
 std::string DeviceQualifier::ToString() const
 {
   if (source.empty() && (cid < 0) && name.empty())
-    return "";
+    return {};
 
-  std::ostringstream ss;
-  ss << source << '/';
   if (cid > -1)
-    ss << cid;
-  ss << '/' << name;
-
-  return ss.str();
+    return fmt::format("{}/{}/{}", source, cid, name);
+  else
+    return fmt::format("{}//{}", source, name);
 }
 
 //
@@ -240,6 +237,18 @@ std::shared_ptr<Device> DeviceContainer::FindDevice(const DeviceQualifier& devq)
   }
 
   return nullptr;
+}
+
+std::vector<std::shared_ptr<Device>> DeviceContainer::GetAllDevices() const
+{
+  std::lock_guard lk(m_devices_mutex);
+
+  std::vector<std::shared_ptr<Device>> devices;
+
+  for (const auto& d : m_devices)
+    devices.emplace_back(d);
+
+  return devices;
 }
 
 std::vector<std::string> DeviceContainer::GetAllDeviceStrings() const

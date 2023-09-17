@@ -59,12 +59,14 @@ public:
       if (sub_command == MATINDEX_A)
       {
         VertexLoaderManager::g_needs_cp_xf_consistency_check = true;
-        VertexShaderManager::SetTexMatrixChangedA(value);
+        auto& system = Core::System::GetInstance();
+        system.GetVertexShaderManager().SetTexMatrixChangedA(value);
       }
       else if (sub_command == MATINDEX_B)
       {
         VertexLoaderManager::g_needs_cp_xf_consistency_check = true;
-        VertexShaderManager::SetTexMatrixChangedB(value);
+        auto& system = Core::System::GetInstance();
+        system.GetVertexShaderManager().SetTexMatrixChangedB(value);
       }
       else if (sub_command == VCD_LO || sub_command == VCD_HI)
       {
@@ -217,8 +219,8 @@ public:
     }
     else
     {
-      Core::System::GetInstance().GetCommandProcessor().HandleUnknownOpcode(opcode, data,
-                                                                            is_preprocess);
+      auto& system = Core::System::GetInstance();
+      system.GetCommandProcessor().HandleUnknownOpcode(system, opcode, data, is_preprocess);
       m_cycles += 1;
     }
   }

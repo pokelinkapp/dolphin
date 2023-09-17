@@ -44,6 +44,7 @@
   <Import Project="$(ExternalsDir)FreeSurround\exports.props" />
   <Import Project="$(ExternalsDir)glslang\exports.props" />
   <Import Project="$(ExternalsDir)imgui\exports.props" />
+  <Import Project="$(ExternalsDir)implot\exports.props" />
   <Import Project="$(ExternalsDir)liblzma\exports.props" />
   <Import Project="$(ExternalsDir)libspng\exports.props" />
   <Import Project="$(ExternalsDir)libusb\exports.props" />
@@ -54,6 +55,7 @@
   <Import Project="$(ExternalsDir)minizip\exports.props" />
   <Import Project="$(ExternalsDir)picojson\exports.props" />
   <Import Project="$(ExternalsDir)pugixml\exports.props" />
+  <Import Project="$(ExternalsDir)rcheevos\exports.props" />
   <Import Project="$(ExternalsDir)SDL\exports.props" />
   <Import Project="$(ExternalsDir)SFML\exports.props" />
   <Import Project="$(ExternalsDir)soundtouch\exports.props" />

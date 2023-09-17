@@ -23,6 +23,10 @@
 
 #include "vulkan/vulkan.h"
 
+#ifdef ANDROID
+#include <unistd.h>
+#endif
+
 // Currently, exclusive fullscreen is only supported on Windows.
 #if defined(WIN32)
 #define SUPPORTS_VULKAN_EXCLUSIVE_FULLSCREEN 1
@@ -48,6 +52,7 @@
 #ifdef __clang__
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunused-variable"
+#pragma clang diagnostic ignored "-Wnullability-completeness"
 #endif  // #ifdef __clang__
 
 #ifdef __GNUC__
@@ -77,10 +82,14 @@
 
 namespace Vulkan
 {
-bool LoadVulkanLibrary();
+bool LoadVulkanLibrary(bool force_system_library = false);
 bool LoadVulkanInstanceFunctions(VkInstance instance);
 bool LoadVulkanDeviceFunctions(VkDevice device);
 void UnloadVulkanLibrary();
+
+#ifdef ANDROID
+bool SupportsCustomDriver();
+#endif
 
 const char* VkResultToString(VkResult res);
 void LogVulkanResult(Common::Log::LogLevel level, const char* func_name, VkResult res,
