@@ -56,12 +56,24 @@ static PyThreadState* InitMainPythonInterpreter()
   if (PyImport_AppendInittab("dolphin", PyInit_dolphin) == -1)
     ERROR_LOG_FMT(SCRIPTING, "failed to add dolphin to builtins");
 
+  PyConfig config;
 #ifdef _WIN32
-  Py_SetPythonHome(const_cast<wchar_t*>(python_home.c_str()));
-  Py_SetPath(python_path.c_str());
+  config.home = const_cast<wchar_t*>(python_home.c_str());
+  PyWideStringList_Append(&config.module_search_paths, python_path.c_str());
+  config.module_search_paths_set = 1;
+  PyConfig_InitPythonConfig(&config); 
 #endif
   INFO_LOG_FMT(SCRIPTING, "Initializing embedded python... {}", Py_GetVersion());
-  Py_InitializeEx(0);
+  const PyStatus status = Py_InitializeFromConfig(&config);
+  if (PyStatus_Exception(status))
+  {
+    PanicAlertFmt(
+        "Failed to initialize python from config. Python won't work (and probably crash)");
+    ERROR_LOG_FMT(
+        SCRIPTING,
+        "Failed to initialize python from config. Python won't work (and probably crash)");
+  }
+  PyConfig_Clear(&config);
 
   // Starting with Python 3.7 Py_Initialize* also initializes the GIL in a locked state.
   // This might be the same issue: https://bugs.python.org/issue38680
