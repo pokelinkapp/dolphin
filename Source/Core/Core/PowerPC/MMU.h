@@ -273,6 +273,13 @@ private:
     PAGE_FAULT,
   };
 
+  enum class TranslateCondition
+  {
+    Always,
+    MsrDrSet,
+    Never
+  };
+
   struct TranslateAddressResult
   {
     u32 address;
@@ -313,9 +320,10 @@ private:
   void UpdateBATs(BatTable& bat_table, u32 base_spr);
   void UpdateFakeMMUBat(BatTable& bat_table, u32 start_addr);
 
-  template <XCheckTLBFlag flag, typename T, bool never_translate = false>
+  template <XCheckTLBFlag flag, typename T,
+            TranslateCondition translate_if = TranslateCondition::MsrDrSet>
   T ReadFromHardware(u32 em_address);
-  template <XCheckTLBFlag flag, bool never_translate = false>
+  template <XCheckTLBFlag flag, TranslateCondition translate_if = TranslateCondition::MsrDrSet>
   void WriteToHardware(u32 em_address, const u32 data, const u32 size);
   template <XCheckTLBFlag flag>
   bool IsRAMAddress(u32 address, bool translate);

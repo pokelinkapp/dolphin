@@ -153,15 +153,7 @@ static void EFB_Write(u32 data, u32 addr)
   }
 }
 
-enum class TranslateCondition
-{
-  Always,
-  MsrDrSet,
-  Never
-};
-
-template <XCheckTLBFlag flag, typename T,
-          TranslateCondition translate_if = TranslateCondition::MsrDrSet>
+template <XCheckTLBFlag flag, typename T, MMU::TranslateCondition translate_if>
 T MMU::ReadFromHardware(u32 em_address)
 {
   const u32 em_address_start_page = em_address & ~HW_PAGE_MASK;
@@ -273,8 +265,7 @@ T MMU::ReadFromHardware(u32 em_address)
   return 0;
 }
 
-template <XCheckTLBFlag flag,
-          TranslateCondition translate_if = TranslateCondition::MsrDrSet>
+template <XCheckTLBFlag flag, MMU::TranslateCondition translate_if>
 void MMU::WriteToHardware(u32 em_address, const u32 data, const u32 size)
 {
   DEBUG_ASSERT(size <= 4);
@@ -750,24 +741,24 @@ u64 MMU::HostRead_U64(const Core::CPUThreadGuard& guard, const u32 address)
   return mmu.ReadFromHardware<XCheckTLBFlag::NoException, u64, TranslateCondition::Always>(address);
 }
 
-s8 MMU::HostRead_S8(const u32 address)
+s8 MMU::HostRead_S8(const Core::CPUThreadGuard& guard, const u32 address)
 {
-  return static_cast<s8>(this->HostRead_U8(address));
+  return static_cast<s8>(HostRead_U8(guard, address));
 }
 
-s16 MMU::HostRead_S16(const u32 address)
+s16 MMU::HostRead_S16(const Core::CPUThreadGuard& guard, const u32 address)
 {
-  return static_cast<s16>(this->HostRead_U16(address));
+  return static_cast<s16>(HostRead_U16(guard, address));
 }
 
-s32 MMU::HostRead_S32(const u32 address)
+s32 MMU::HostRead_S32(const Core::CPUThreadGuard& guard, const u32 address)
 {
-  return static_cast<s32>(this->HostRead_U32(address));
+  return static_cast<s32>(HostRead_U32(guard, address));
 }
 
-s64 MMU::HostRead_S64(const u32 address)
+s64 MMU::HostRead_S64(const Core::CPUThreadGuard& guard, const u32 address)
 {
-  return static_cast<s64>(this->HostRead_U64(address));
+  return static_cast<s64>(HostRead_U64(guard, address));
 }
 
 float MMU::HostRead_F32(const Core::CPUThreadGuard& guard, const u32 address)
@@ -809,24 +800,24 @@ void MMU::HostWrite_U64(const Core::CPUThreadGuard& guard, const u64 var, const 
   mmu.WriteToHardware<XCheckTLBFlag::NoException, TranslateCondition::Always>(address + sizeof(u32), static_cast<u32>(var), 4);
 }
 
-void HostWrite_S8(const s8 var, const u32 address)
+void MMU::HostWrite_S8(const Core::CPUThreadGuard& guard, const s8 var, const u32 address)
 {
-  HostWrite_U8(static_cast<u8>(var), address);
+  HostWrite_U8(guard, static_cast<u8>(var), address);
 }
 
-void HostWrite_S16(const s16 var, const u32 address)
+void MMU::HostWrite_S16(const Core::CPUThreadGuard& guard, const s16 var, const u32 address)
 {
-  HostWrite_U16(static_cast<u16>(var), address);
+  HostWrite_U16(guard, static_cast<u16>(var), address);
 }
 
-void HostWrite_S32(const s32 var, const u32 address)
+void MMU::HostWrite_S32(const Core::CPUThreadGuard& guard, const s32 var, const u32 address)
 {
-  HostWrite_U32(static_cast<u32>(var), address);
+  HostWrite_U32(guard, static_cast<u32>(var), address);
 }
 
-void HostWrite_S64(const s64 var, const u32 address)
+void MMU::HostWrite_S64(const Core::CPUThreadGuard& guard, const s64 var, const u32 address)
 {
-  HostWrite_U64(static_cast<u64>(var), address);
+  HostWrite_U64(guard, static_cast<u64>(var), address);
 }
 
 void MMU::HostWrite_F32(const Core::CPUThreadGuard& guard, const float var, const u32 address)
@@ -1518,11 +1509,11 @@ MMU::TranslateAddressResult MMU::TranslatePageAddress(const EffectiveAddress add
 
     for (int i = 0; i < 8; i++, pteg_addr += 8)
     {
-      const u32 pteg = ReadFromHardware<flag, u32, true>(pteg_addr);
+      const u32 pteg = ReadFromHardware<flag, u32, TranslateCondition::Never>(pteg_addr);
 
       if (pte1.Hex == pteg)
       {
-        UPTE_Hi pte2(ReadFromHardware<flag, u32, true>(pteg_addr + 4));
+        UPTE_Hi pte2(ReadFromHardware<flag, u32, TranslateCondition::Never>(pteg_addr + 4));
 
         // set the access bits
         switch (flag)
