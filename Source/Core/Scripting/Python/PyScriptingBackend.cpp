@@ -27,15 +27,6 @@ namespace PyScripting
 
 static PyThreadState* InitMainPythonInterpreter()
 {
-#ifdef _WIN32
-  static const std::wstring python_home = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed";
-  static const std::wstring python_path =
-      UTF8ToWString(File::GetCurrentDir()) + L";" +
-      UTF8ToWString(File::GetExeDirectory()) + L"/python-embed/python38.zip;" +
-      UTF8ToWString(File::GetExeDirectory()) + L"/python-embed;" +
-      UTF8ToWString(File::GetExeDirectory());
-#endif
-
   if (PyImport_AppendInittab("dolio_stdout", PyInit_dolio_stdout) == -1)
     ERROR_LOG_FMT(SCRIPTING, "failed to add dolio_stdout to builtins");
   if (PyImport_AppendInittab("dolio_stderr", PyInit_dolio_stderr) == -1)
@@ -57,23 +48,29 @@ static PyThreadState* InitMainPythonInterpreter()
     ERROR_LOG_FMT(SCRIPTING, "failed to add dolphin to builtins");
 
   PyConfig config;
+  PyConfig_InitIsolatedConfig(&config);
 #ifdef _WIN32
-  config.home = const_cast<wchar_t*>(python_home.c_str());
-  PyWideStringList_Append(&config.module_search_paths, python_path.c_str());
+  const std::wstring python_home = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed";
+  PyConfig_SetString(&config, &config.home, python_home.c_str());
+
+  const std::wstring python_path_workdir = UTF8ToWString(File::GetCurrentDir());
+  const std::wstring python_path_stdlib = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed/python311.zip";
+  const std::wstring python_path_embed = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed";
+  const std::wstring python_path_exe = UTF8ToWString(File::GetExeDirectory());
+  PyWideStringList_Append(&config.module_search_paths, python_path_workdir.c_str());
+  PyWideStringList_Append(&config.module_search_paths, python_path_stdlib.c_str());
+  PyWideStringList_Append(&config.module_search_paths, python_path_embed.c_str());
+  PyWideStringList_Append(&config.module_search_paths, python_path_exe.c_str());
   config.module_search_paths_set = 1;
-  PyConfig_InitPythonConfig(&config); 
 #endif
   INFO_LOG_FMT(SCRIPTING, "Initializing embedded python... {}", Py_GetVersion());
   const PyStatus status = Py_InitializeFromConfig(&config);
+  PyConfig_Clear(&config);
   if (PyStatus_Exception(status))
   {
-    PanicAlertFmt(
-        "Failed to initialize python from config. Python won't work (and probably crash)");
-    ERROR_LOG_FMT(
-        SCRIPTING,
-        "Failed to initialize python from config. Python won't work (and probably crash)");
+    ERROR_LOG_FMT(SCRIPTING, "Failed to initialize python from config: {}", status.err_msg);
+    PanicAlertFmt("Failed to initialize python from config: {}", status.err_msg);
   }
-  PyConfig_Clear(&config);
 
   // Starting with Python 3.7 Py_Initialize* also initializes the GIL in a locked state.
   // This might be the same issue: https://bugs.python.org/issue38680
