@@ -114,7 +114,7 @@ static PyObject* set_gc_buttons(PyObject* module, PyObject* args)
   Py_RETURN_NONE;
 }
 
-static PyObject* get_wii_buttons(PyObject* module, PyObject* args)
+static PyObject* get_wiimote_buttons(PyObject* module, PyObject* args)
 {
   const auto controller_id_opt = Py::ParseTuple<int>(args);
   if (!controller_id_opt.has_value())
@@ -139,7 +139,7 @@ static PyObject* get_wii_buttons(PyObject* module, PyObject* args)
   );
 }
 
-static PyObject* set_wii_buttons(PyObject* module, PyObject* args)
+static PyObject* set_wiimote_buttons(PyObject* module, PyObject* args)
 {
   int controller_id;
   PyObject* dict;
@@ -179,7 +179,7 @@ static PyObject* set_wii_buttons(PyObject* module, PyObject* args)
   Py_RETURN_NONE;
 }
 
-static PyObject* get_wii_pointer(PyObject* module, PyObject* args)
+static PyObject* get_wiimote_pointer(PyObject* module, PyObject* args)
 {
   const auto controller_id_opt = Py::ParseTuple<int>(args);
   if (!controller_id_opt.has_value())
@@ -190,7 +190,7 @@ static PyObject* get_wii_pointer(PyObject* module, PyObject* args)
                        state->wii_manip->Get(controller_id, API::InputKey::WII_IR_Y));
 }
 
-static PyObject* set_wii_pointer(PyObject* module, PyObject* args)
+static PyObject* set_wiimote_pointer(PyObject* module, PyObject* args)
 {
   int controller_id;
   float x, y;
@@ -202,7 +202,7 @@ static PyObject* set_wii_pointer(PyObject* module, PyObject* args)
   Py_RETURN_NONE;
 }
 
-static PyObject* get_wii_acceleration(PyObject* module, PyObject* args)
+static PyObject* get_wiimote_acceleration(PyObject* module, PyObject* args)
 {
   const auto controller_id_opt = Py::ParseTuple<int>(args);
   if (!controller_id_opt.has_value())
@@ -214,7 +214,7 @@ static PyObject* get_wii_acceleration(PyObject* module, PyObject* args)
                        state->wii_manip->Get(controller_id, API::InputKey::WII_ACCELERATION_Z));
 }
 
-static PyObject* set_wii_acceleration(PyObject* module, PyObject* args)
+static PyObject* set_wiimote_acceleration(PyObject* module, PyObject* args)
 {
   int controller_id;
   float x, y, z;
@@ -227,7 +227,7 @@ static PyObject* set_wii_acceleration(PyObject* module, PyObject* args)
   Py_RETURN_NONE;
 }
 
-static PyObject* get_wii_angular_velocity(PyObject* module, PyObject* args)
+static PyObject* get_wiimote_angular_velocity(PyObject* module, PyObject* args)
 {
   const auto controller_id_opt = Py::ParseTuple<int>(args);
   if (!controller_id_opt.has_value())
@@ -240,7 +240,7 @@ static PyObject* get_wii_angular_velocity(PyObject* module, PyObject* args)
                        state->wii_manip->Get(controller_id, API::InputKey::WII_ANGULAR_VELOCITY_Z));
 }
 
-static PyObject* set_wii_angular_velocity(PyObject* module, PyObject* args)
+static PyObject* set_wiimote_angular_velocity(PyObject* module, PyObject* args)
 {
   int controller_id;
   float x, y, z;
@@ -532,6 +532,121 @@ static PyObject* set_gba_buttons(PyObject* module, PyObject* args)
 
 static void setup_controller_module(PyObject* module, ControllerModuleState* state)
 {
+  static const char pycode[] = R"(
+# The typed dicts are also defined here make them available at runtime.
+# They are copied from controller.pyi and should stay in sync with that file.
+from typing import TypedDict
+
+
+class GCInputs(TypedDict, total=False):
+    """
+    Dictionary describing the state of a GameCube controller.
+    Boolean keys (buttons): True means pressed, False means released.
+    Float keys for triggers: 0 means fully released, 1 means fully pressed.
+    Float keys for sticks: 0 means neutral, ranges from -1 to 1.
+    """
+    A: bool
+    B: bool
+    X: bool
+    Y: bool
+    Z: bool
+    Start: bool
+    Up: bool
+    Down: bool
+    Left: bool
+    Right: bool
+    L: bool
+    R: bool
+    StickX: float
+    StickY: float
+    CStickX: float
+    CStickY: float
+    TriggerLeft: float
+    TriggerRight: float
+
+
+class WiimoteInputs(TypedDict, total=False):
+    """
+    Dictionary describing the state of a Wii Remote controller.
+    Boolean keys (buttons): True means pressed, False means released.
+    """
+    A: bool
+    B: bool
+    One: bool
+    Two: bool
+    Plus: bool
+    Minus: bool
+    Home: bool
+    Up: bool
+    Down: bool
+    Left: bool
+    Right: bool
+
+
+class WiiClassicInputs(TypedDict, total=False):
+    """
+    Dictionary describing the state of a Wii Classic controller.
+    Boolean keys: True means pressed, False means released.
+    Float keys for triggers: 0 means fully released, 1 means fully pressed.
+    Float keys for sticks: 0 means neutral, ranges from -1 to 1.
+    """
+    A: bool
+    B: bool
+    X: bool
+    Y: bool
+    ZL: bool
+    ZR: bool
+    Plus: bool
+    Minus: bool
+    Home: bool
+    Up: bool
+    Down: bool
+    Left: bool
+    Right: bool
+    L: bool
+    R: bool
+    TriggerLeft: float
+    TriggerRight: float
+    LeftStickX: float
+    LeftStickY: float
+    RightStickX: float
+    RightStickY: float
+
+
+class WiiNunchukInputs(TypedDict, total=False):
+    """
+    Dictionary describing the state of a Wii Nunchuk controller.
+    Boolean keys (buttons): True means pressed, False means released.
+    Float keys for sticks: 0 means neutral, ranges from -1 to 1.
+    """
+    C: bool
+    Z: bool
+    StickX: float
+    StickY: float
+
+
+class GBAInputs(TypedDict, total=False):
+    """
+    Dictionary describing the state of a GameBoy Advance controller.
+    Boolean keys (buttons): True means pressed, False means released.
+    """
+    A: bool
+    B: bool
+    L: bool
+    R: bool
+    Start: bool
+    Select: bool
+    Up: bool
+    Down: bool
+    Left: bool
+    Right: bool
+
+)";
+  Py::Object result = Py::LoadPyCodeIntoModule(module, pycode);
+  if (result.IsNull())
+  {
+    ERROR_LOG_FMT(SCRIPTING, "Failed to load embedded python code into controller module");
+  }
   state->gc_manip = PyScriptingBackend::GetCurrent()->GetGCManip();
   state->wii_manip = PyScriptingBackend::GetCurrent()->GetWiiManip();
   state->wii_classic_manip = PyScriptingBackend::GetCurrent()->GetWiiClassicManip();
@@ -551,14 +666,14 @@ PyMODINIT_FUNC PyInit_controller()
   static PyMethodDef method_defs[] = {
       {"get_gc_buttons", get_gc_buttons, METH_VARARGS, ""},
       {"set_gc_buttons", set_gc_buttons, METH_VARARGS, ""},
-      {"get_wii_buttons", get_wii_buttons, METH_VARARGS, ""},
-      {"set_wii_buttons", set_wii_buttons, METH_VARARGS, ""},
-      {"get_wii_pointer", get_wii_pointer, METH_VARARGS, ""},
-      {"set_wii_pointer", set_wii_pointer, METH_VARARGS, ""},
-      {"get_wii_acceleration", get_wii_acceleration, METH_VARARGS, ""},
-      {"set_wii_acceleration", set_wii_acceleration, METH_VARARGS, ""},
-      {"get_wii_angular_velocity", get_wii_angular_velocity, METH_VARARGS, ""},
-      {"set_wii_angular_velocity", set_wii_angular_velocity, METH_VARARGS, ""},
+      {"get_wiimote_buttons", get_wiimote_buttons, METH_VARARGS, ""},
+      {"set_wiimote_buttons", set_wiimote_buttons, METH_VARARGS, ""},
+      {"get_wiimote_pointer", get_wiimote_pointer, METH_VARARGS, ""},
+      {"set_wiimote_pointer", set_wiimote_pointer, METH_VARARGS, ""},
+      {"get_wiimote_acceleration", get_wiimote_acceleration, METH_VARARGS, ""},
+      {"set_wiimote_acceleration", set_wiimote_acceleration, METH_VARARGS, ""},
+      {"get_wiimote_angular_velocity", get_wiimote_angular_velocity, METH_VARARGS, ""},
+      {"set_wiimote_angular_velocity", set_wiimote_angular_velocity, METH_VARARGS, ""},
       {"get_wii_classic_buttons", get_wii_classic_buttons, METH_VARARGS, ""},
       {"set_wii_classic_buttons", set_wii_classic_buttons, METH_VARARGS, ""},
       {"get_wii_nunchuk_buttons", get_wii_nunchuk_buttons, METH_VARARGS, ""},
