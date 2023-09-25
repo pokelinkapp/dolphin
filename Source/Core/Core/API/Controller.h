@@ -101,6 +101,25 @@ struct InputKey
   static const InputKey GBA_LEFT;
   static const InputKey GBA_RIGHT;
 
+  static const InputKey WII_SWING_X;
+  static const InputKey WII_SWING_Y;
+  static const InputKey WII_SWING_Z;
+  static const InputKey WII_SWING_DISTANCE;
+  static const InputKey WII_SWING_SPEED;
+  static const InputKey WII_SWING_RETURN_SPEED;
+  static const InputKey WII_SWING_ANGLE;
+
+  static const InputKey WII_SHAKE_X;
+  static const InputKey WII_SHAKE_Y;
+  static const InputKey WII_SHAKE_Z;
+  static const InputKey WII_SHAKE_INTENSITY;
+  static const InputKey WII_SHAKE_FREQUENCY;
+
+  static const InputKey WII_TILT_X;
+  static const InputKey WII_TILT_Y;
+  static const InputKey WII_TILT_ANGLE;
+  static const InputKey WII_TILT_VELOCITY;
+
   std::string_view group_name;
   std::string_view control_name;
 

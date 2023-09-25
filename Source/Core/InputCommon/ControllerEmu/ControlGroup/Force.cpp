@@ -76,16 +76,26 @@ Force::ReshapeData Force::GetReshapableState(bool adjusted) const
   return Reshape(x, y);
 }
 
-Force::StateData Force::GetState(bool adjusted) const
+Force::StateData Force::GetState(bool adjusted, const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  const auto state = GetReshapableState(adjusted);
+  auto state = GetReshapableState(adjusted);
   ControlState z = controls[4]->GetState() - controls[5]->GetState();
 
   if (adjusted)
   {
     // Apply deadzone to z and scale.
-    z = ApplyDeadzone(z, GetDeadzonePercentage()) * GetMaxDistance();
+    z = ApplyDeadzone(z, GetDeadzonePercentage()) * GetMaxDistance(override_func);
   }
+
+  if (!override_func)
+    return {float(state.x), float(state.y), float(z)};
+
+  if (const std::optional<ControlState> x_dir_override = override_func(name, X_INPUT_OVERRIDE, state.x))
+    state.x = *x_dir_override;
+  if (const std::optional<ControlState> y_dir_override = override_func(name, Y_INPUT_OVERRIDE, state.y))
+    state.y = *y_dir_override;
+  if (const std::optional<ControlState> z_dir_override = override_func(name, Z_INPUT_OVERRIDE, z))
+    z = *z_dir_override;
 
   return {float(state.x), float(state.y), float(z)};
 }
@@ -93,27 +103,56 @@ Force::StateData Force::GetState(bool adjusted) const
 ControlState Force::GetGateRadiusAtAngle(double) const
 {
   // Just a circle of the configured distance:
-  return GetMaxDistance();
+  return GetMaxDistance(nullptr);
 }
 
-ControlState Force::GetSpeed() const
+ControlState Force::GetSpeed(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_speed_setting.GetValue();
+  ControlState speed = m_speed_setting.GetValue();
+  if (!override_func)
+    return speed;
+
+  if (const std::optional<ControlState> speed_override = override_func(name, SPEED, speed))
+    speed = *speed_override;
+
+  return speed;
 }
 
-ControlState Force::GetReturnSpeed() const
+ControlState Force::GetReturnSpeed(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_return_speed_setting.GetValue();
+  ControlState return_speed = m_return_speed_setting.GetValue();
+  if (!override_func)
+    return return_speed;
+
+  if (const std::optional<ControlState> return_speed_override = override_func(name, RETURN_SPEED, return_speed))
+    return_speed = *return_speed_override;
+
+  return return_speed;
 }
 
-ControlState Force::GetTwistAngle() const
+ControlState Force::GetTwistAngle(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_angle_setting.GetValue() * MathUtil::TAU / 360;
+  ControlState angle = m_angle_setting.GetValue() * MathUtil::TAU / 360;
+  if (!override_func)
+    return angle;
+
+  if (const std::optional<ControlState> angle_override = override_func(name, ANGLE, angle))
+    angle = *angle_override;
+
+  return angle;
+
 }
 
-ControlState Force::GetMaxDistance() const
+ControlState Force::GetMaxDistance(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_distance_setting.GetValue() / 100;
+  ControlState distance = m_distance_setting.GetValue() / 100;
+  if (!override_func)
+    return distance;
+
+  if (const std::optional<ControlState> distance_override = override_func(name, DISTANCE, distance))
+    distance = *distance_override;
+
+  return distance;
 }
 
 ControlState Force::GetDefaultInputRadiusAtAngle(double) const
@@ -156,20 +195,30 @@ Shake::Shake(const std::string& name_, ControlState default_intensity_scale)
              6, 1, 20);
 }
 
-Shake::StateData Shake::GetState(bool adjusted) const
+Shake::StateData Shake::GetState(bool adjusted, const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  const float x = controls[0]->GetState();
-  const float y = controls[1]->GetState();
-  const float z = controls[2]->GetState();
+  ControlState x = controls[0]->GetState();
+  ControlState y = controls[1]->GetState();
+  ControlState z = controls[2]->GetState();
 
-  StateData result = {x, y, z};
+  StateData result = {float(x), float(y), float(z)};
 
   // FYI: Unadjusted values are used in UI.
   if (adjusted)
     for (auto& c : result.data)
       c = ApplyDeadzone(c, GetDeadzone());
 
-  return result;
+  if (!override_func)
+    return result;
+
+  if (const std::optional<ControlState> x_override = override_func(name, Force::X_INPUT_OVERRIDE, x))
+    x = *x_override;
+  if (const std::optional<ControlState> y_override = override_func(name, Force::Y_INPUT_OVERRIDE, y))
+    y = *y_override;
+  if (const std::optional<ControlState> z_override = override_func(name, Force::Z_INPUT_OVERRIDE, z))
+    z = *z_override;
+
+  return {float(x), float(y), float(z)};
 }
 
 ControlState Shake::GetDeadzone() const
@@ -177,14 +226,30 @@ ControlState Shake::GetDeadzone() const
   return m_deadzone_setting.GetValue() / 100;
 }
 
-ControlState Shake::GetIntensity() const
+ControlState Shake::GetIntensity(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_intensity_setting.GetValue() / 100;
+  ControlState intensity = m_intensity_setting.GetValue() / 100;
+
+  if (!override_func)
+    return intensity;
+
+  if (const std::optional<ControlState> intensity_override = override_func(name, INTENSITY, intensity))
+    intensity = *intensity_override;
+
+  return intensity;
 }
 
-ControlState Shake::GetFrequency() const
+ControlState Shake::GetFrequency(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_frequency_setting.GetValue();
+  ControlState frequency = m_frequency_setting.GetValue();
+
+  if (!override_func)
+    return frequency;
+
+  if (const std::optional<ControlState> frequency_override = override_func(name, FREQUENCY, frequency))
+    frequency = *frequency_override;
+
+  return frequency;
 }
 
 }  // namespace ControllerEmu

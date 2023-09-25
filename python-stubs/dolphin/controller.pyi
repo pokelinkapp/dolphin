@@ -330,3 +330,78 @@ def set_gba_buttons(controller_id: int, inputs: GBAInputs, /) -> None:
     :param controller_id: 0-based index of the controller
     :param inputs: dictionary describing the input map
     """
+
+
+def get_wiimote_swing(controller_id: int, /) \
+        -> (float, float, float, float, float, float, float):
+    """
+    Returns the current wii remote swing state, as a vector (x, y, z, distance, speed, return_speed, angle).
+    The angle is measured in radians. The distances are in meters.
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, z, distance, speed, return_speed, angle)
+    """
+
+
+def set_wiimote_swing(controller_id: int, x: float, y: float, z: float,
+                      distance: float, speed: float, return_speed: float, angle: float, /) -> None:
+    """
+    Sets the WiiMote swing motion.
+
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the swing
+    :param y: y-component of the swing
+    :param z: z-component of the swing
+    :param distance: distance of the swing (m)
+    :param speed: speed of the swing (m/s)
+    :param return_speed: return speed of the swing (m/s)
+    :param angle: angle of the swing (rad)
+    """
+
+
+def get_wiimote_shake(controller_id: int, /) \
+        -> (float, float, float, float, float):
+    """
+    Returns the current wii remote shake state, as a vector (x, y, z, intensity, frequency).
+    The intensity is in meters, and the frequency in Hertz.
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, z, intensity, frequency)
+    """
+
+
+def set_wiimote_shake(controller_id: int, x: float, y: float, z: float,
+                      intensity: float, frequency: float, /) -> None:
+    """
+    Sets the WiiMote shake motion.
+
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the shake
+    :param y: y-component of the shake
+    :param z: z-component of the shake
+    :param intensity: intensity of the shake (m)
+    :param frequency: frequency of the shake (Hz)
+    """
+
+
+def get_wiimote_tilt(controller_id: int, /) \
+        -> (float, float, float, float):
+    """
+    Returns the current wii remote shake state, as a vector (x, y, angle, velocity).
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, angle, velocity)
+    """
+
+
+def set_wiimote_tilt(controller_id: int, x: float, y: float,
+                      angle: float, velocity: float, /) -> None:
+    """
+    Sets the WiiMote tilt motion.
+
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the tilt
+    :param y: y-component of the tilt
+    :param angle: max tilt angle (deg/180)
+    :param velocity: rotational velocity of the tilt (rad/s)
+    """

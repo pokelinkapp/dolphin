@@ -53,14 +53,38 @@ Tilt::ReshapeData Tilt::GetReshapableState(bool adjusted) const
   return Reshape(x, y, GetModifierInput()->GetState());
 }
 
-Tilt::StateData Tilt::GetState() const
+Tilt::StateData Tilt::GetState(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return GetReshapableState(true);
+  Tilt::StateData state = GetReshapableState(true);
+
+  if (!override_func)
+    return state;
+
+  if (const std::optional<ControlState> x_override = override_func(name, X_INPUT_OVERRIDE, state.x))
+    state.x = *x_override;
+  if (const std::optional<ControlState> y_override = override_func(name, Y_INPUT_OVERRIDE, state.y))
+    state.y = *y_override;
+
+  return state;
+}
+
+ControlState Tilt::GetGateRadiusAtAngle(double ang, const ControllerEmu::InputOverrideFunction& override_func) const
+{
+  ControlState max_tilt_angle = m_max_angle_setting.GetValue() / 180;
+
+  if (!override_func)
+    return SquareStickGate(max_tilt_angle).GetRadiusAtAngle(ang);
+
+  if (const std::optional<ControlState> angle_override = override_func(name, ANGLE, max_tilt_angle))
+    max_tilt_angle = *angle_override;
+
+  return SquareStickGate(max_tilt_angle).GetRadiusAtAngle(ang);
 }
 
 ControlState Tilt::GetGateRadiusAtAngle(double ang) const
 {
-  const ControlState max_tilt_angle = m_max_angle_setting.GetValue() / 180;
+  ControlState max_tilt_angle = m_max_angle_setting.GetValue() / 180;
+
   return SquareStickGate(max_tilt_angle).GetRadiusAtAngle(ang);
 }
 
@@ -69,9 +93,17 @@ ControlState Tilt::GetDefaultInputRadiusAtAngle(double ang) const
   return SquareStickGate(1.0).GetRadiusAtAngle(ang);
 }
 
-ControlState Tilt::GetMaxRotationalVelocity() const
+ControlState Tilt::GetMaxRotationalVelocity(const ControllerEmu::InputOverrideFunction& override_func) const
 {
-  return m_max_rotational_velocity.GetValue() * MathUtil::TAU;
+  ControlState max_rotational_velocity = m_max_rotational_velocity.GetValue() * MathUtil::TAU;
+
+  if (!override_func)
+    return max_rotational_velocity;
+
+  if (const std::optional<ControlState> velocity_override = override_func(name, VELOCITY, max_rotational_velocity))
+    max_rotational_velocity = *velocity_override;
+
+  return max_rotational_velocity;
 }
 
 Control* Tilt::GetModifierInput() const

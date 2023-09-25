@@ -98,9 +98,9 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   nc_data.SetButtons(buttons);
 
   // Acceleration data:
-  EmulateSwing(&m_swing_state, m_swing, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateSwing(&m_swing_state, m_swing, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateTilt(&m_tilt_state, m_tilt, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateShake(&m_shake_state, m_shake, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
 
   const auto transformation =
       GetRotationalMatrix(-m_tilt_state.angle) * GetRotationalMatrix(-m_swing_state.angle);
