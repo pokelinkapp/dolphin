@@ -7,6 +7,7 @@
 #include <functional>
 #include <mutex>
 
+#include "Core/Core.h"
 #include "Common/CommonTypes.h"
 
 namespace API
@@ -70,17 +71,32 @@ public:
 
   void EmitEvent(T evt)
   {
-    std::lock_guard lock{m_listeners_iterate_mutex};
-    // avoid concurrent modification issues by iterating over a copy
-    std::vector<std::pair<ListenerID<T>, Listener<T>>> listener_pairs = m_listener_pairs;
-    for (auto& listener_pair : listener_pairs)
-      listener_pair.second(evt);
-    // avoid concurrent modification issues by performing a swap
-    // with an fresh empty vector.
-    std::vector<Listener<T>> one_time_listeners;
-    std::swap(one_time_listeners, m_one_time_listeners);
-    for (auto& listener : one_time_listeners)
-      listener(evt);
+    // Events are not necessarily emitted from the CPU thread,
+    // e.g. FrameDrawn is emitted from the FrameDumper thread.
+    // However, we cannot have concurrent Python code invocations,
+    // because Python code might invoke Dolphin code that requires
+    // a CPU thread lock, but concurrent events on the CPU thread
+    // need the Python GIL to emit their events. This can lead to
+    // deadlocks between the CPU thread guard and the GIL.
+    // See for example https://github.com/Felk/dolphin/issues/25#issuecomment-1736209834
+    // That's why we just put every event on the CPU thread.
+    Core::RunOnCPUThread(
+        [&] {
+          // TODO felk: since all events are on the CPU thread now, are these concurrency precautions even necessary anymore?
+          // TODO felk: alternatively, would only wrapping each individual invocation with 'RunOnCPUThread' be better/faster?
+          std::lock_guard lock{m_listeners_iterate_mutex};
+          // avoid concurrent modification issues by iterating over a copy
+          std::vector<std::pair<ListenerID<T>, Listener<T>>> listener_pairs = m_listener_pairs;
+          for (auto& listener_pair : listener_pairs)
+            listener_pair.second(evt);
+          // avoid concurrent modification issues by performing a swap
+          // with an fresh empty vector.
+          std::vector<Listener<T>> one_time_listeners;
+          std::swap(one_time_listeners, m_one_time_listeners);
+          for (auto& listener : one_time_listeners)
+            listener(evt);
+        },
+        true);
   }
 
   ListenerID<T> ListenEvent(Listener<T> listener)

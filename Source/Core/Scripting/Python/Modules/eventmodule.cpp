@@ -109,14 +109,6 @@ struct PyEvent<MappingFunc<TEvent, TsArgs...>, TFunc>
 
   static void Listener(const Py::Object module, const TEvent& event)
   {
-    // We make the following assumption here:
-    // - Events that originate from emulation (e.g. frameadvance)
-    //   are emitted from the emulation thread.
-    // - Events that do not originate from emulation are emitted from a different thread.
-    // Under those circumstances we can always just directly invoke the listener
-    // and have the desired effect of
-    // a) emulation events being processed synchronously to emulation, and
-    // b) concurrent events be processed concurrently.
     EventModuleState* state = Py::GetState<EventModuleState>(module.Lend());
     NotifyAwaitingCoroutines(module, event);
     if (state->GetCallback<TEvent>().IsNull())
