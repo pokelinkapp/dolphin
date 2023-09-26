@@ -413,6 +413,10 @@ static PyObject* set_wii_nunchuk_buttons(PyObject* module, PyObject* args)
     state->wii_nunchuk_manip->Set(controller_id, input_key, PyObject_IsTrue(py_object) ? 1 : 0,
                                   API::ClearOn::NextFrame);
   };
+  const auto set_analog = [&](const API::InputKey& input_key, PyObject* py_object) {
+    state->wii_nunchuk_manip->Set(controller_id, input_key, PyFloat_AsDouble(py_object),
+                                  API::ClearOn::NextFrame);
+  };
 
   PyObject* py_c = PyDict_GetItemString(dict, "C");
   PyObject* py_z = PyDict_GetItemString(dict, "Z");
@@ -423,9 +427,9 @@ static PyObject* set_wii_nunchuk_buttons(PyObject* module, PyObject* args)
   if (py_z != nullptr)
     set_bool(API::InputKey::WII_NUNCHUK_Z, py_z);
   if (py_stick_x != nullptr)
-    set_bool(API::InputKey::WII_NUNCHUK_STICK_X, py_stick_x);
+    set_analog(API::InputKey::WII_NUNCHUK_STICK_X, py_stick_x);
   if (py_stick_y != nullptr)
-    set_bool(API::InputKey::WII_NUNCHUK_STICK_Y, py_stick_y);
+    set_analog(API::InputKey::WII_NUNCHUK_STICK_Y, py_stick_y);
 
   Py_RETURN_NONE;
 }
