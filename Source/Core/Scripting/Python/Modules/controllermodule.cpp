@@ -537,7 +537,7 @@ static PyObject* get_wiimote_swing(PyObject* module, PyObject* args)
     return nullptr;
   const int controller_id = std::get<0>(controller_id_opt.value());
   const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
-  return Py_BuildValue("(dddddd)",
+  return Py_BuildValue("(ddddddd)",
                        state->wii_manip->Get(controller_id, API::InputKey::WII_SWING_X),
                        state->wii_manip->Get(controller_id, API::InputKey::WII_SWING_Y),
                        state->wii_manip->Get(controller_id, API::InputKey::WII_SWING_Z),
@@ -604,7 +604,7 @@ static PyObject* get_wiimote_tilt(PyObject* module, PyObject* args)
   return Py_BuildValue("(dddd)",
                        state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_X),
                        state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_Y),
-                       state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_ANGLE),
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_ANGLE)*M_PI,
                        state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_VELOCITY));
 }
 
@@ -617,8 +617,100 @@ static PyObject* set_wiimote_tilt(PyObject* module, PyObject* args)
   const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
   state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_X, x, API::ClearOn::NextFrame);
   state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_Y, y, API::ClearOn::NextFrame);
-  state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_ANGLE, angle, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_ANGLE, angle/M_PI, API::ClearOn::NextFrame);
   state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_VELOCITY, velocity, API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_nunchuk_swing(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue("(ddddddd)",
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_X),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_Y),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_Z),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_DISTANCE),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_SPEED),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_RETURN_SPEED),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SWING_ANGLE));
+}
+
+static PyObject* set_wii_nunchuk_swing(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  float x, y, z, distance, speed, return_speed, angle;
+  if (!PyArg_ParseTuple(args, "ifffffff", &controller_id, &x, &y, &z, &distance, &speed, &return_speed, &angle))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_X, x, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_Y, y, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_Z, z, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_DISTANCE, distance, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_SPEED, speed, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_RETURN_SPEED, return_speed, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SWING_ANGLE, angle, API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_nunchuk_shake(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue("(ddddd)",
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SHAKE_X),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SHAKE_Y),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SHAKE_Z),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SHAKE_INTENSITY),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_SHAKE_FREQUENCY));
+}
+
+static PyObject* set_wii_nunchuk_shake(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  float x, y, z, intensity, frequency;
+  if (!PyArg_ParseTuple(args, "ifffff", &controller_id, &x, &y, &z, &intensity, &frequency))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SHAKE_X, x, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SHAKE_Y, y, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SHAKE_Z, z, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SHAKE_INTENSITY, intensity, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_SHAKE_FREQUENCY, frequency, API::ClearOn::NextFrame);
+  Py_RETURN_NONE;
+}
+
+static PyObject* get_wii_nunchuk_tilt(PyObject* module, PyObject* args)
+{
+  const auto controller_id_opt = Py::ParseTuple<int>(args);
+  if (!controller_id_opt.has_value())
+    return nullptr;
+  const int controller_id = std::get<0>(controller_id_opt.value());
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  return Py_BuildValue("(dddd)",
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_X),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_Y),
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_ANGLE)*M_PI,
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_VELOCITY));
+}
+
+static PyObject* set_wii_nunchuk_tilt(PyObject* module, PyObject* args)
+{
+  int controller_id;
+  float x, y, angle, velocity;
+  if (!PyArg_ParseTuple(args, "iffff", &controller_id, &x, &y, &angle, &velocity))
+    return nullptr;
+  const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_X, x, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_Y, y, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_ANGLE, angle/M_PI, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_VELOCITY, velocity, API::ClearOn::NextFrame);
   Py_RETURN_NONE;
 }
 
@@ -780,6 +872,12 @@ PyMODINIT_FUNC PyInit_controller()
       {"set_wiimote_shake", set_wiimote_shake, METH_VARARGS, ""},
       {"get_wiimote_tilt", get_wiimote_tilt, METH_VARARGS, ""},
       {"set_wiimote_tilt", set_wiimote_tilt, METH_VARARGS, ""},
+      {"get_wii_nunchuk_swing", get_wii_nunchuk_swing, METH_VARARGS, ""},
+      {"set_wii_nunchuk_swing", set_wii_nunchuk_swing, METH_VARARGS, ""},
+      {"get_wii_nunchuk_shake", get_wii_nunchuk_shake, METH_VARARGS, ""},
+      {"set_wii_nunchuk_shake", set_wii_nunchuk_shake, METH_VARARGS, ""},
+      {"get_wii_nunchuk_tilt", get_wii_nunchuk_tilt, METH_VARARGS, ""},
+      {"set_wii_nunchuk_tilt", set_wii_nunchuk_tilt, METH_VARARGS, ""},
       {nullptr, nullptr, 0, nullptr}  // Sentinel
   };
   static PyModuleDef module_def =

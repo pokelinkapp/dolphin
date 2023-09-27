@@ -231,9 +231,9 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
 
   // i18n: "Point" refers to the action of pointing a Wii Remote.
   groups.emplace_back(m_ir = new ControllerEmu::Cursor(IR_GROUP, _trans("Point")));
-  groups.emplace_back(m_shake = new ControllerEmu::Shake(_trans("Shake")));
-  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
-  groups.emplace_back(m_swing = new ControllerEmu::Force(_trans("Swing")));
+  groups.emplace_back(m_shake = new ControllerEmu::Shake(SHAKE_GROUP, _trans("Shake")));
+  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(TILT_GROUP, _trans("Tilt")));
+  groups.emplace_back(m_swing = new ControllerEmu::Force(SWING_GROUP, _trans("Swing")));
 
   groups.emplace_back(m_imu_ir = new ControllerEmu::IMUCursor("IMUIR", _trans("Point")));
   const auto fov_default =

@@ -16,7 +16,7 @@ class Force : public ReshapableInput
 public:
   using StateData = Common::Vec3;
 
-  explicit Force(const std::string& name);
+  explicit Force(const std::string& name, const std::string& ui_name);
 
   ReshapeData GetReshapableState(bool adjusted) const final override;
   ControlState GetGateRadiusAtAngle(double ang) const final override;
@@ -52,7 +52,7 @@ class Shake : public ControlGroup
 public:
   using StateData = Common::Vec3;
 
-  explicit Shake(const std::string& name, ControlState default_intensity_scale = 1);
+  explicit Shake(const std::string& name, const std::string& ui_name, ControlState default_intensity_scale = 1);
 
   StateData GetState(bool adjusted, const ControllerEmu::InputOverrideFunction& override_func) const;
 

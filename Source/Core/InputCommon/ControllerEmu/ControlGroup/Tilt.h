@@ -16,7 +16,7 @@ class Tilt : public ReshapableInput
 public:
   using StateData = ReshapeData;
 
-  explicit Tilt(const std::string& name);
+  explicit Tilt(const std::string& name, const std::string& ui_name);
 
   ReshapeData GetReshapableState(bool adjusted) const final override;
   ControlState GetGateRadiusAtAngle(double angle, const ControllerEmu::InputOverrideFunction& override_func) const;

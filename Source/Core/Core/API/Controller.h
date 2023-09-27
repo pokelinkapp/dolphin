@@ -120,6 +120,25 @@ struct InputKey
   static const InputKey WII_TILT_ANGLE;
   static const InputKey WII_TILT_VELOCITY;
 
+  static const InputKey NUNCHUK_SWING_X;
+  static const InputKey NUNCHUK_SWING_Y;
+  static const InputKey NUNCHUK_SWING_Z;
+  static const InputKey NUNCHUK_SWING_DISTANCE;
+  static const InputKey NUNCHUK_SWING_SPEED;
+  static const InputKey NUNCHUK_SWING_RETURN_SPEED;
+  static const InputKey NUNCHUK_SWING_ANGLE;
+
+  static const InputKey NUNCHUK_SHAKE_X;
+  static const InputKey NUNCHUK_SHAKE_Y;
+  static const InputKey NUNCHUK_SHAKE_Z;
+  static const InputKey NUNCHUK_SHAKE_INTENSITY;
+  static const InputKey NUNCHUK_SHAKE_FREQUENCY;
+
+  static const InputKey NUNCHUK_TILT_X;
+  static const InputKey NUNCHUK_TILT_Y;
+  static const InputKey NUNCHUK_TILT_ANGLE;
+  static const InputKey NUNCHUK_TILT_VELOCITY;
+
   std::string_view group_name;
   std::string_view control_name;
 

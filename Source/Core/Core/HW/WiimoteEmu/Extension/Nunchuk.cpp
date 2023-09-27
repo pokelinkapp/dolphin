@@ -49,13 +49,13 @@ Nunchuk::Nunchuk() : Extension1stParty(_trans("Nunchuk"))
   // Shake
   // Inverse the default intensity so shake is opposite that of wiimote.
   // This is needed by Donkey Kong Country Returns for proper shake action detection.
-  groups.emplace_back(m_shake = new ControllerEmu::Shake(_trans("Shake"), -1));
+  groups.emplace_back(m_shake = new ControllerEmu::Shake(SHAKE_GROUP, _trans("Shake"), -1));
 
   // tilt
-  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
+  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(TILT_GROUP, _trans("Tilt")));
 
   // swing
-  groups.emplace_back(m_swing = new ControllerEmu::Force(_trans("Swing")));
+  groups.emplace_back(m_swing = new ControllerEmu::Force(SWING_GROUP, _trans("Swing")));
 
   // accelerometer
   groups.emplace_back(m_imu_accelerometer = new ControllerEmu::IMUAccelerometer(

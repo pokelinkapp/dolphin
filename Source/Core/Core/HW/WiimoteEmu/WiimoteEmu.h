@@ -121,9 +121,9 @@ public:
   static constexpr const char* ACCELEROMETER_GROUP = "IMUAccelerometer";
   static constexpr const char* GYROSCOPE_GROUP = "IMUGyroscope";
   static constexpr const char* IR_GROUP = "IR";
-  static constexpr const char* SWING_GROUP = "Swing";
-  static constexpr const char* SHAKE_GROUP = "Shake";
-  static constexpr const char* TILT_GROUP = "Tilt";
+  static constexpr const char* SWING_GROUP = "WiiMote Swing";
+  static constexpr const char* SHAKE_GROUP = "WiiMote Shake";
+  static constexpr const char* TILT_GROUP = "WiiMote Tilt";
 
   static constexpr const char* A_BUTTON = "A";
   static constexpr const char* B_BUTTON = "B";
