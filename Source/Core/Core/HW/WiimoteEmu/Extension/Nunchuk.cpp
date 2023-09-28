@@ -49,13 +49,13 @@ Nunchuk::Nunchuk() : Extension1stParty(_trans("Nunchuk"))
   // Shake
   // Inverse the default intensity so shake is opposite that of wiimote.
   // This is needed by Donkey Kong Country Returns for proper shake action detection.
-  groups.emplace_back(m_shake = new ControllerEmu::Shake(_trans("Shake"), -1));
+  groups.emplace_back(m_shake = new ControllerEmu::Shake(SHAKE_GROUP, _trans("Shake"), -1));
 
   // tilt
-  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
+  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(TILT_GROUP, _trans("Tilt")));
 
   // swing
-  groups.emplace_back(m_swing = new ControllerEmu::Force(_trans("Swing")));
+  groups.emplace_back(m_swing = new ControllerEmu::Force(SWING_GROUP, _trans("Swing")));
 
   // accelerometer
   groups.emplace_back(m_imu_accelerometer = new ControllerEmu::IMUAccelerometer(
@@ -98,9 +98,9 @@ void Nunchuk::BuildDesiredExtensionState(DesiredExtensionState* target_state)
   nc_data.SetButtons(buttons);
 
   // Acceleration data:
-  EmulateSwing(&m_swing_state, m_swing, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateSwing(&m_swing_state, m_swing, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateTilt(&m_tilt_state, m_tilt, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateShake(&m_shake_state, m_shake, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
 
   const auto transformation =
       GetRotationalMatrix(-m_tilt_state.angle) * GetRotationalMatrix(-m_swing_state.angle);

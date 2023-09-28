@@ -179,6 +179,7 @@ using Wii = WiimoteEmu::Wiimote;
 using WiiClassic = WiimoteEmu::Classic;
 using WiiNunchuk = WiimoteEmu::Nunchuk;
 using GBA = GBAPad;
+using Nunchuk = WiiNunchuk;
 
 const InputKey InputKey::GC_A = {GCPad::BUTTONS_GROUP, GCPad::A_BUTTON};
 const InputKey InputKey::GC_B = {GCPad::BUTTONS_GROUP, GCPad::B_BUTTON};
@@ -259,5 +260,44 @@ const InputKey InputKey::GBA_UP = {GBA::DPAD_GROUP, DIRECTION_UP};
 const InputKey InputKey::GBA_DOWN = {GBA::DPAD_GROUP, DIRECTION_DOWN};
 const InputKey InputKey::GBA_LEFT = {GBA::DPAD_GROUP, DIRECTION_LEFT};
 const InputKey InputKey::GBA_RIGHT = {GBA::DPAD_GROUP, DIRECTION_RIGHT};
+
+const InputKey InputKey::WII_SWING_X = {Wii::SWING_GROUP, XYInput::X_INPUT_OVERRIDE};
+const InputKey InputKey::WII_SWING_Y = {Wii::SWING_GROUP, XYInput::Y_INPUT_OVERRIDE};
+const InputKey InputKey::WII_SWING_Z = {Wii::SWING_GROUP, XYInput::Z_INPUT_OVERRIDE};
+const InputKey InputKey::WII_SWING_DISTANCE = {Wii::SWING_GROUP, ControllerEmu::Force::DISTANCE};
+const InputKey InputKey::WII_SWING_SPEED = {Wii::SWING_GROUP, ControllerEmu::Force::SPEED};
+const InputKey InputKey::WII_SWING_RETURN_SPEED = {Wii::SWING_GROUP, ControllerEmu::Force::RETURN_SPEED};
+const InputKey InputKey::WII_SWING_ANGLE = {Wii::SWING_GROUP, ControllerEmu::Force::ANGLE};
+
+const InputKey InputKey::WII_SHAKE_X = {Wii::SHAKE_GROUP, XYInput::X_INPUT_OVERRIDE};
+const InputKey InputKey::WII_SHAKE_Y = {Wii::SHAKE_GROUP, XYInput::Y_INPUT_OVERRIDE};
+const InputKey InputKey::WII_SHAKE_Z = {Wii::SHAKE_GROUP, XYInput::Z_INPUT_OVERRIDE};
+const InputKey InputKey::WII_SHAKE_INTENSITY = {Wii::SHAKE_GROUP, ControllerEmu::Shake::INTENSITY};
+const InputKey InputKey::WII_SHAKE_FREQUENCY = {Wii::SHAKE_GROUP, ControllerEmu::Shake::FREQUENCY};
+
+const InputKey InputKey::WII_TILT_X = {Wii::TILT_GROUP, XYInput::X_INPUT_OVERRIDE};
+const InputKey InputKey::WII_TILT_Y = {Wii::TILT_GROUP, XYInput::Y_INPUT_OVERRIDE};
+const InputKey InputKey::WII_TILT_ANGLE = {Wii::TILT_GROUP, ControllerEmu::Tilt::ANGLE};
+const InputKey InputKey::WII_TILT_VELOCITY = {Wii::TILT_GROUP, ControllerEmu::Tilt::VELOCITY};
+
+const InputKey InputKey::NUNCHUK_SWING_X = {Nunchuk::SWING_GROUP, XYInput::X_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_SWING_Y = {Nunchuk::SWING_GROUP, XYInput::Y_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_SWING_Z = {Nunchuk::SWING_GROUP, XYInput::Z_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_SWING_DISTANCE = {Nunchuk::SWING_GROUP, ControllerEmu::Force::DISTANCE};
+const InputKey InputKey::NUNCHUK_SWING_SPEED = {Nunchuk::SWING_GROUP, ControllerEmu::Force::SPEED};
+const InputKey InputKey::NUNCHUK_SWING_RETURN_SPEED = {Nunchuk::SWING_GROUP, ControllerEmu::Force::RETURN_SPEED};
+const InputKey InputKey::NUNCHUK_SWING_ANGLE = {Nunchuk::SWING_GROUP, ControllerEmu::Force::ANGLE};
+
+const InputKey InputKey::NUNCHUK_SHAKE_X = {Nunchuk::SWING_GROUP, XYInput::X_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_SHAKE_Y = {Nunchuk::SWING_GROUP, XYInput::Y_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_SHAKE_Z = {Nunchuk::SWING_GROUP, XYInput::Z_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_SHAKE_INTENSITY = {Nunchuk::SWING_GROUP, ControllerEmu::Shake::INTENSITY};
+const InputKey InputKey::NUNCHUK_SHAKE_FREQUENCY = {Nunchuk::SWING_GROUP, ControllerEmu::Shake::FREQUENCY};
+
+const InputKey InputKey::NUNCHUK_TILT_X = {Nunchuk::SWING_GROUP, XYInput::X_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_TILT_Y = {Nunchuk::SWING_GROUP, XYInput::Y_INPUT_OVERRIDE};
+const InputKey InputKey::NUNCHUK_TILT_ANGLE = {Nunchuk::SWING_GROUP, ControllerEmu::Tilt::ANGLE};
+const InputKey InputKey::NUNCHUK_TILT_VELOCITY = {Nunchuk::SWING_GROUP, ControllerEmu::Tilt::VELOCITY};
+
 
 }  // namespace API

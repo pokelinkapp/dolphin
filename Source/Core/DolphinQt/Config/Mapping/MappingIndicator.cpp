@@ -412,7 +412,7 @@ void AnalogStickIndicator::Draw()
 
 void TiltIndicator::Draw()
 {
-  WiimoteEmu::EmulateTilt(&m_motion_state, &m_group, 1.f / INDICATOR_UPDATE_FREQ);
+  WiimoteEmu::EmulateTilt(&m_motion_state, &m_group, nullptr, 1.f / INDICATOR_UPDATE_FREQ);
 
   auto adj_coord = Common::DVec2{-m_motion_state.angle.y, m_motion_state.angle.x} / MathUtil::PI;
 
@@ -540,7 +540,7 @@ void SwingIndicator::DrawUnderGate(QPainter& p)
   }
 
   // Raw Z:
-  const auto raw_coord = force.GetState(false);
+  const auto raw_coord = force.GetState(false, nullptr);
   p.setPen(GetCosmeticPen(QPen(GetRawInputColor(), INPUT_DOT_RADIUS)));
   p.drawLine(QLineF(-1, raw_coord.z, 1, raw_coord.z));
 
@@ -564,7 +564,7 @@ void SwingIndicator::DrawUnderGate(QPainter& p)
 void SwingIndicator::Draw()
 {
   auto& force = m_swing_group;
-  WiimoteEmu::EmulateSwing(&m_motion_state, &force, 1.f / INDICATOR_UPDATE_FREQ);
+  WiimoteEmu::EmulateSwing(&m_motion_state, &force, nullptr, 1.f / INDICATOR_UPDATE_FREQ);
 
   DrawReshapableInput(force, SWING_GATE_COLOR,
                       Common::DVec2{-m_motion_state.position.x, m_motion_state.position.z});
@@ -574,7 +574,7 @@ void ShakeMappingIndicator::Draw()
 {
   constexpr std::size_t HISTORY_COUNT = INDICATOR_UPDATE_FREQ;
 
-  WiimoteEmu::EmulateShake(&m_motion_state, &m_shake_group, 1.f / INDICATOR_UPDATE_FREQ);
+  WiimoteEmu::EmulateShake(&m_motion_state, &m_shake_group, nullptr, 1.f / INDICATOR_UPDATE_FREQ);
 
   constexpr float MAX_DISTANCE = 0.5f;
 
@@ -600,7 +600,7 @@ void ShakeMappingIndicator::Draw()
   }
 
   // Raw input.
-  const auto raw_coord = m_shake_group.GetState(false);
+  const auto raw_coord = m_shake_group.GetState(false, nullptr);
   p.setPen(GetInputDotPen(GetRawInputColor()));
   for (std::size_t c = 0; c != raw_coord.data.size(); ++c)
   {

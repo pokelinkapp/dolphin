@@ -231,9 +231,9 @@ Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(i
 
   // i18n: "Point" refers to the action of pointing a Wii Remote.
   groups.emplace_back(m_ir = new ControllerEmu::Cursor(IR_GROUP, _trans("Point")));
-  groups.emplace_back(m_shake = new ControllerEmu::Shake(_trans("Shake")));
-  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(_trans("Tilt")));
-  groups.emplace_back(m_swing = new ControllerEmu::Force(_trans("Swing")));
+  groups.emplace_back(m_shake = new ControllerEmu::Shake(SHAKE_GROUP, _trans("Shake")));
+  groups.emplace_back(m_tilt = new ControllerEmu::Tilt(TILT_GROUP, _trans("Tilt")));
+  groups.emplace_back(m_swing = new ControllerEmu::Force(SWING_GROUP, _trans("Swing")));
 
   groups.emplace_back(m_imu_ir = new ControllerEmu::IMUCursor("IMUIR", _trans("Point")));
   const auto fov_default =
@@ -805,10 +805,10 @@ void Wiimote::RefreshConfig()
 
 void Wiimote::StepDynamics()
 {
-  EmulateSwing(&m_swing_state, m_swing, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulateTilt(&m_tilt_state, m_tilt, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateSwing(&m_swing_state, m_swing, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateTilt(&m_tilt_state, m_tilt, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
   EmulatePoint(&m_point_state, m_ir, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
-  EmulateShake(&m_shake_state, m_shake, 1.f / ::Wiimote::UPDATE_FREQ);
+  EmulateShake(&m_shake_state, m_shake, m_input_override_function, 1.f / ::Wiimote::UPDATE_FREQ);
   EmulateIMUCursor(&m_imu_cursor_state, m_imu_ir, m_imu_accelerometer, m_imu_gyroscope,
                    1.f / ::Wiimote::UPDATE_FREQ);
 }

@@ -81,9 +81,9 @@ Common::Quaternion ComplementaryFilter(const Common::Quaternion& gyroscope,
 }
 
 void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_group,
-                  float time_elapsed)
+                  const ControllerEmu::InputOverrideFunction& override_func, float time_elapsed)
 {
-  auto target_position = shake_group->GetState() * float(shake_group->GetIntensity() / 2);
+  auto target_position = shake_group->GetState(true, override_func) * float(shake_group->GetIntensity(override_func) / 2);
   for (std::size_t i = 0; i != target_position.data.size(); ++i)
   {
     if (state->velocity.data[i] * std::copysign(1.f, target_position.data[i]) < 0 ||
@@ -94,7 +94,7 @@ void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_grou
   }
 
   // Time from "top" to "bottom" of one shake.
-  const auto travel_time = 1 / shake_group->GetFrequency() / 2;
+  const auto travel_time = 1 / shake_group->GetFrequency(override_func) / 2;
 
   Common::Vec3 jerk;
   for (std::size_t i = 0; i != target_position.data.size(); ++i)
@@ -108,9 +108,10 @@ void EmulateShake(PositionalState* state, ControllerEmu::Shake* const shake_grou
   ApproachPositionWithJerk(state, target_position, jerk, time_elapsed);
 }
 
-void EmulateTilt(RotationalState* state, ControllerEmu::Tilt* const tilt_group, float time_elapsed)
+void EmulateTilt(RotationalState* state, ControllerEmu::Tilt* const tilt_group,
+                 const ControllerEmu::InputOverrideFunction& override_func, float time_elapsed)
 {
-  const auto target = tilt_group->GetState();
+  const auto target = tilt_group->GetState(override_func);
 
   // 180 degrees is currently the max tilt value.
   const ControlState roll = target.x * MathUtil::PI;
@@ -126,16 +127,17 @@ void EmulateTilt(RotationalState* state, ControllerEmu::Tilt* const tilt_group, 
       angle -= std::copysign(MathUtil::TAU, angle);
   }
 
-  const auto max_accel = std::pow(tilt_group->GetMaxRotationalVelocity(), 2) / MathUtil::TAU;
+  const auto max_accel = std::pow(tilt_group->GetMaxRotationalVelocity(override_func), 2) / MathUtil::TAU;
 
   ApproachAngleWithAccel(state, target_angle, max_accel, time_elapsed);
 }
 
-void EmulateSwing(MotionState* state, ControllerEmu::Force* swing_group, float time_elapsed)
+void EmulateSwing(MotionState* state, ControllerEmu::Force* swing_group,
+                  const ControllerEmu::InputOverrideFunction& override_func, float time_elapsed)
 {
-  const auto input_state = swing_group->GetState();
-  const float max_distance = swing_group->GetMaxDistance();
-  const float max_angle = swing_group->GetTwistAngle();
+  const auto input_state = swing_group->GetState(true, override_func);
+  const float max_distance = swing_group->GetMaxDistance(override_func);
+  const float max_angle = swing_group->GetTwistAngle(override_func);
 
   // Note: Y/Z swapped because X/Y axis to the swing_group is X/Z to the wiimote.
   // X is negated because Wiimote X+ is to the left.
@@ -146,8 +148,8 @@ void EmulateSwing(MotionState* state, ControllerEmu::Force* swing_group, float t
   const auto xz_target_dist = Common::Vec2{target_position.x, target_position.z}.Length();
   const auto y_target_dist = std::abs(target_position.y);
   const auto target_dist = Common::Vec3{xz_target_dist, y_target_dist, xz_target_dist};
-  const auto speed = MathUtil::Lerp(Common::Vec3{1, 1, 1} * float(swing_group->GetReturnSpeed()),
-                                    Common::Vec3{1, 1, 1} * float(swing_group->GetSpeed()),
+  const auto speed = MathUtil::Lerp(Common::Vec3{1, 1, 1} * float(swing_group->GetReturnSpeed(override_func)),
+                                    Common::Vec3{1, 1, 1} * float(swing_group->GetSpeed(override_func)),
                                     target_dist / max_distance);
 
   // Convert our m/s "speed" to the jerk required to reach this speed when traveling 1 meter.

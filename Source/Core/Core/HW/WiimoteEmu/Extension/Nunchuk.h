@@ -179,6 +179,10 @@ public:
   static constexpr const char* C_BUTTON = "C";
   static constexpr const char* Z_BUTTON = "Z";
 
+  static constexpr const char* SWING_GROUP = "Nunchuk Swing";
+  static constexpr const char* SHAKE_GROUP = "Nunchuk Shake";
+  static constexpr const char* TILT_GROUP = "Nunchuk Tilt";
+
 private:
   ControllerEmu::Tilt* m_tilt;
   ControllerEmu::Force* m_swing;

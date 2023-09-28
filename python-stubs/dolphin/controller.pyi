@@ -199,6 +199,7 @@ def set_wiimote_acceleration(controller_id: int,
     """
     Sets the current wii remote acceleration, as a vector (x, y, z).
     The acceleration is measured in m/s².
+    This function overrides set_wiimote_shake and set_wiimote_swing.
     The override will hold for the current frame.
     :param controller_id: 0-based index of the controller
     :param x: x-component of the acceleration vector
@@ -222,6 +223,7 @@ def set_wiimote_angular_velocity(controller_id: int,
     """
     Sets the current wii remote angular velocity, as a vector (x, y, z).
     The angular velocity is measured in radians/s.
+    This function overrides set_wiimote_tilt and set_wiimote_swing.
     The override will hold for the current frame.
     :param controller_id: 0-based index of the controller
     :param x: x-component of the angular velocity vector
@@ -254,6 +256,82 @@ def set_wii_classic_buttons(controller_id: int, inputs: WiiClassicInputs,
     The override will hold for the current frame.
     :param controller_id: 0-based index of the controller
     :param inputs: dictionary describing the input map
+    """
+
+
+def get_wiimote_swing(controller_id: int, /) \
+        -> (float, float, float, float, float, float, float):
+    """
+    Returns the current wii remote swing state, as a vector (x, y, z, distance, speed, return_speed, angle).
+    The angle is measured in radians. The distances are in meters.
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, z, distance, speed, return_speed, angle)
+    """
+
+
+def set_wiimote_swing(controller_id: int, x: float, y: float, z: float,
+                      distance: float, speed: float, return_speed: float, angle: float, /) -> None:
+    """
+    Sets the wii remote swing motion.
+    This function is overridden by set_wiimote_acceleration and set_wiimote_angular_velocity.
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the swing
+    :param y: y-component of the swing
+    :param z: z-component of the swing
+    :param distance: distance of the swing (m)
+    :param speed: speed of the swing (m/s)
+    :param return_speed: return speed of the swing (m/s)
+    :param angle: angle of the swing (rad)
+    """
+
+
+def get_wiimote_shake(controller_id: int, /) \
+        -> (float, float, float, float, float):
+    """
+    Returns the current wii remote shake state, as a vector (x, y, z, intensity, frequency).
+    The intensity is in meters, and the frequency in Hertz.
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, z, intensity, frequency)
+    """
+
+
+def set_wiimote_shake(controller_id: int, x: float, y: float, z: float,
+                      intensity: float, frequency: float, /) -> None:
+    """
+    Sets the wii remote shake motion.
+    This function is overridden by set_wiimote_acceleration.
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the shake
+    :param y: y-component of the shake
+    :param z: z-component of the shake
+    :param intensity: intensity of the shake (m)
+    :param frequency: frequency of the shake (Hz)
+    """
+
+
+def get_wiimote_tilt(controller_id: int, /) \
+        -> (float, float, float, float):
+    """
+    Returns the current wii remote tilt motion state, as a vector (x, y, angle, velocity).
+    The angle is in rad, and the velocity in rad/s
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, angle, velocity)
+    """
+
+
+def set_wiimote_tilt(controller_id: int, x: float, y: float,
+                     angle: float, velocity: float, /) -> None:
+    """
+    Sets the wii remote tilt motion.
+    This function is overridden by set_wiimote_angular_velocity.
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the tilt
+    :param y: y-component of the tilt
+    :param angle: max tilt angle (rad)
+    :param velocity: rotational velocity of the tilt (rad/s)
     """
 
 
@@ -304,6 +382,82 @@ def set_wii_nunchuk_acceleration(controller_id: int,
     :param x: x-component of the acceleration vector
     :param y: y-component of the acceleration vector
     :param z: z-component of the acceleration vector
+    """
+
+
+def get_wii_nunchuk_swing(controller_id: int, /) \
+        -> (float, float, float, float, float, float, float):
+    """
+    Returns the current wii nunchuk swing state, as a vector (x, y, z, distance, speed, return_speed, angle).
+    The angle is measured in radians. The distances are in meters.
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, z, distance, speed, return_speed, angle)
+    """
+
+
+def set_wii_nunchuk_swing(controller_id: int, x: float, y: float, z: float,
+                      distance: float, speed: float, return_speed: float, angle: float, /) -> None:
+    """
+    Sets the wii nunchuk swing motion.
+    This function is overridden by set_wii_nunchuk_acceleration and set_wii_nunchuk_angular_velocity.
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the swing
+    :param y: y-component of the swing
+    :param z: z-component of the swing
+    :param distance: distance of the swing (m)
+    :param speed: speed of the swing (m/s)
+    :param return_speed: return speed of the swing (m/s)
+    :param angle: angle of the swing (rad)
+    """
+
+
+def get_wii_nunchuk_shake(controller_id: int, /) \
+        -> (float, float, float, float, float):
+    """
+    Returns the current wii nunchuk shake state, as a vector (x, y, z, intensity, frequency).
+    The intensity is in meters, and the frequency in Hertz.
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, z, intensity, frequency)
+    """
+
+
+def set_wii_nunchuk_shake(controller_id: int, x: float, y: float, z: float,
+                      intensity: float, frequency: float, /) -> None:
+    """
+    Sets the wii nunchuk shake motion.
+    This function is overridden by set_wii_nunchuk_acceleration.
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the shake
+    :param y: y-component of the shake
+    :param z: z-component of the shake
+    :param intensity: intensity of the shake (m)
+    :param frequency: frequency of the shake (Hz)
+    """
+
+
+def get_wii_nunchuk_tilt(controller_id: int, /) \
+        -> (float, float, float, float):
+    """
+    Returns the current wii nunchuk tilt motion state, as a vector (x, y, angle, velocity).
+    The angle is in rad, and the velocity in rad/s
+    :param controller_id: 0-based index of the controller
+    :return: The current swing state as a tuple (x, y, angle, velocity)
+    """
+
+
+def set_wii_nunchuk_tilt(controller_id: int, x: float, y: float,
+                     angle: float, velocity: float, /) -> None:
+    """
+    Sets the wii nunchuk tilt motion.
+    This function is overridden by set_wii_nunchuk_angular_velocity.
+    The override will hold for the current frame.
+    :param controller_id: 0-based index of the controller
+    :param x: x-component of the tilt
+    :param y: y-component of the tilt
+    :param angle: max tilt angle (rad)
+    :param velocity: rotational velocity of the tilt (rad/s)
     """
 
 
