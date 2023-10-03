@@ -7,8 +7,10 @@
 #include <functional>
 #include <mutex>
 
+#include "Common/Assert.h"
 #include "Core/Core.h"
 #include "Common/CommonTypes.h"
+#include "Common/Logging/Log.h"
 
 namespace API
 {
@@ -71,32 +73,35 @@ public:
 
   void EmitEvent(T evt)
   {
-    // Events are not necessarily emitted from the CPU thread,
-    // e.g. FrameDrawn is emitted from the FrameDumper thread.
+    // Some events are not necessarily produced within the CPU thread,
+    // e.g. FrameDrawn originates from the FrameDumper thread.
     // However, we cannot have concurrent Python code invocations,
     // because Python code might invoke Dolphin code that requires
     // a CPU thread lock, but concurrent events on the CPU thread
     // need the Python GIL to emit their events. This can lead to
     // deadlocks between the CPU thread guard and the GIL.
     // See for example https://github.com/Felk/dolphin/issues/25#issuecomment-1736209834
-    // That's why we just put every event on the CPU thread.
-    Core::RunOnCPUThread(
-        [&] {
-          // TODO felk: since all events are on the CPU thread now, are these concurrency precautions even necessary anymore?
-          // TODO felk: alternatively, would only wrapping each individual invocation with 'RunOnCPUThread' be better/faster?
-          std::lock_guard lock{m_listeners_iterate_mutex};
-          // avoid concurrent modification issues by iterating over a copy
-          std::vector<std::pair<ListenerID<T>, Listener<T>>> listener_pairs = m_listener_pairs;
-          for (auto& listener_pair : listener_pairs)
-            listener_pair.second(evt);
-          // avoid concurrent modification issues by performing a swap
-          // with an fresh empty vector.
-          std::vector<Listener<T>> one_time_listeners;
-          std::swap(one_time_listeners, m_one_time_listeners);
-          for (auto& listener : one_time_listeners)
-            listener(evt);
-        },
-        true);
+    // That's why every event must be emitted from the CPU thread,
+    // and all event sources are responsible to schedule their events
+    // into the emulation somehow.
+    ASSERT_MSG(SCRIPTING, Core::IsCPUThread(),
+               "Events must be emitted from the CPU thread, but {} wasn't", typeid(T).name());
+
+    // Events are processed sequentially due to the fact that they are
+    // happening on the CPU thread, but Python code could theoretically
+    // spawn new host threads for example to do stuff concurrently.
+    // Just to be sure, have some guards against concurrent modifications.
+    std::lock_guard lock{m_listeners_iterate_mutex};
+    // avoid concurrent modification issues by iterating over a copy
+    std::vector<std::pair<ListenerID<T>, Listener<T>>> listener_pairs = m_listener_pairs;
+    for (auto& listener_pair : listener_pairs)
+      listener_pair.second(evt);
+    // avoid concurrent modification issues by performing a swap
+    // with an fresh empty vector.
+    std::vector<Listener<T>> one_time_listeners;
+    std::swap(one_time_listeners, m_one_time_listeners);
+    for (auto& listener : one_time_listeners)
+      listener(evt);
   }
 
   ListenerID<T> ListenEvent(Listener<T> listener)

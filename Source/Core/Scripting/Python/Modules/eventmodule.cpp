@@ -110,7 +110,9 @@ struct PyEvent<MappingFunc<TEvent, TsArgs...>, TFunc>
   static void Listener(const Py::Object module, const TEvent& event)
   {
     EventModuleState* state = Py::GetState<EventModuleState>(module.Lend());
+    // TODO felk: unregister the event instead of checking for possibly awaiting coroutines here to not have the event's overhead even though there isn't actually anyone listening
     NotifyAwaitingCoroutines(module, event);
+    // TODO felk: unregister the event instead of checking for a callback here to not have the event's overhead even though there isn't actually anyone listening
     if (state->GetCallback<TEvent>().IsNull())
       return;
     const std::tuple<TsArgs...> args = TFunc(event);
