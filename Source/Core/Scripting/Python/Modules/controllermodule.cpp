@@ -11,6 +11,8 @@
 
 namespace PyScripting
 {
+constexpr float pi = 3.141592654f;
+
 struct ControllerModuleState
 {
   API::BaseManip* gc_manip;
@@ -608,7 +610,7 @@ static PyObject* get_wiimote_tilt(PyObject* module, PyObject* args)
   return Py_BuildValue("(dddd)",
                        state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_X),
                        state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_Y),
-                       state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_ANGLE)*M_PI,
+                       state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_ANGLE) * pi,
                        state->wii_manip->Get(controller_id, API::InputKey::WII_TILT_VELOCITY));
 }
 
@@ -621,7 +623,7 @@ static PyObject* set_wiimote_tilt(PyObject* module, PyObject* args)
   const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
   state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_X, x, API::ClearOn::NextFrame);
   state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_Y, y, API::ClearOn::NextFrame);
-  state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_ANGLE, angle/M_PI, API::ClearOn::NextFrame);
+  state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_ANGLE, angle / pi, API::ClearOn::NextFrame);
   state->wii_manip->Set(controller_id, API::InputKey::WII_TILT_VELOCITY, velocity, API::ClearOn::NextFrame);
   Py_RETURN_NONE;
 }
@@ -700,7 +702,7 @@ static PyObject* get_wii_nunchuk_tilt(PyObject* module, PyObject* args)
   return Py_BuildValue("(dddd)",
                        state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_X),
                        state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_Y),
-                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_ANGLE)*M_PI,
+                       state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_ANGLE) * pi,
                        state->wii_nunchuk_manip->Get(controller_id, API::InputKey::NUNCHUK_TILT_VELOCITY));
 }
 
@@ -713,7 +715,7 @@ static PyObject* set_wii_nunchuk_tilt(PyObject* module, PyObject* args)
   const ControllerModuleState* state = Py::GetState<ControllerModuleState>(module);
   state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_X, x, API::ClearOn::NextFrame);
   state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_Y, y, API::ClearOn::NextFrame);
-  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_ANGLE, angle/M_PI, API::ClearOn::NextFrame);
+  state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_ANGLE, angle / pi, API::ClearOn::NextFrame);
   state->wii_nunchuk_manip->Set(controller_id, API::InputKey::NUNCHUK_TILT_VELOCITY, velocity, API::ClearOn::NextFrame);
   Py_RETURN_NONE;
 }
