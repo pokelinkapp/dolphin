@@ -639,6 +639,7 @@ PRIVATE
   FatFs
   fmt::fmt
   LZO::LZO
+  LZ4::LZ4
   ZLIB::ZLIB
 )
 

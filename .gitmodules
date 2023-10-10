@@ -60,10 +60,13 @@
 [submodule "Externals/curl/curl"]
 	path = Externals/curl/curl
 	url = https://github.com/curl/curl.git
-[submodule "Externals/fmt/fmt"]
-	path = Externals/fmt/fmt
-	url = https://github.com/fmtlib/fmt.git
 [submodule "Externals/python"]
 	path = Externals/python
 	url = https://github.com/Felk/ext-python.git
 	branch = master
+[submodule "Externals/fmt/fmt"]
+	path = Externals/fmt/fmt
+	url = https://github.com/fmtlib/fmt.git
+[submodule "Externals/lz4/lz4"]
+	path = Externals/lz4/lz4
+	url = https://github.com/lz4/lz4

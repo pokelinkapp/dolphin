@@ -630,7 +630,7 @@ if (_M_X86)
 endif()
 add_subdirectory(Externals/cpp-optparse)
 
-dolphin_find_optional_system_library(fmt Externals/fmt 8)
+dolphin_find_optional_system_library(fmt Externals/fmt 10.1)
 
 add_subdirectory(Externals/imgui)
 add_subdirectory(Externals/implot)
@@ -681,6 +681,8 @@ dolphin_find_optional_system_library_pkgconfig(ZLIB zlib-ng ZLIB::ZLIB Externals
 dolphin_find_optional_system_library_pkgconfig(MINIZIP minizip>=3.0.0 minizip::minizip Externals/minizip)
 
 dolphin_find_optional_system_library(LZO Externals/LZO)
+
+dolphin_find_optional_system_library_pkgconfig(lz4 liblz4>=1.8 LZ4::LZ4 Externals/lz4)
 
 dolphin_find_optional_system_library_pkgconfig(SPNG spng spng::spng Externals/libspng)
 
