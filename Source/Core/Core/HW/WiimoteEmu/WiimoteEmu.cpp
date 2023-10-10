@@ -206,10 +206,6 @@ void Wiimote::Reset()
   m_imu_cursor_state = {};
 }
 
-WiimoteCommon::ButtonData Wiimote::GetButtonData() const {
-  return m_status.buttons;
-}
-
 Wiimote::Wiimote(const unsigned int index) : m_index(index), m_bt_device_index(index)
 {
   using Translatability = ControllerEmu::Translatability;
