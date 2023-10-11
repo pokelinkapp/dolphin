@@ -54,7 +54,7 @@ static PyThreadState* InitMainPythonInterpreter()
   PyConfig_SetString(&config, &config.home, python_home.c_str());
 
   const std::wstring python_path_workdir = UTF8ToWString(File::GetCurrentDir());
-  const std::wstring python_path_stdlib = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed/python311.zip";
+  const std::wstring python_path_stdlib = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed/python312.zip";
   const std::wstring python_path_embed = UTF8ToWString(File::GetExeDirectory()) + L"/python-embed";
   const std::wstring python_path_exe = UTF8ToWString(File::GetExeDirectory());
   PyWideStringList_Append(&config.module_search_paths, python_path_workdir.c_str());
