@@ -106,6 +106,11 @@ static void Init(std::filesystem::path script_filepath)
   if (PyCoro_CheckExact(execution_result))
   {
     Py::Object event_module = Py::Wrap(PyImport_ImportModule("dolphin_event"));
+    if (event_module.IsNull())
+    {
+      PyErr_Print();
+      return;
+    }
     HandleNewCoroutine(event_module, Py::Wrap(execution_result));
   }
 }
@@ -140,7 +145,17 @@ PyScriptingBackend::PyScriptingBackend(std::filesystem::path script_filepath,
   }
   else
   {
-    m_interp_threadstate = Py_NewInterpreter();
+    // TODO felk: set settings to "0, 1, OWN_GIL" to enable per-interpreter submodules, but I need to thoroughly test them first
+    PyInterpreterConfig config = {
+      .use_main_obmalloc = 1,
+      .check_multi_interp_extensions = 0,
+      .gil = PyInterpreterConfig_SHARED_GIL,
+    };
+    PyStatus status = Py_NewInterpreterFromConfig(&m_interp_threadstate, &config);
+    if (PyStatus_Exception(status)) {
+      ERROR_LOG_FMT(SCRIPTING, "Error creating new subinterpreter: {}", status.err_msg);
+      abort();
+    }
     PyThreadState_Swap(m_interp_threadstate);
   }
   u64 interp_id = PyInterpreterState_GetID(m_interp_threadstate->interp);
@@ -152,14 +167,18 @@ PyScriptingBackend::PyScriptingBackend(std::filesystem::path script_filepath,
     Py::Object result_stdout = Py::Wrap(PyImport_ImportModule("dolio_stdout"));
     if (result_stdout.IsNull())
     {
-      ERROR_LOG_FMT(SCRIPTING, "Error auto-importing dolio_stdout for stdout");
-      PyErr_Print();
+      // get the error string by hand because PyErr_Print wouldn't print anywhere since stderr isn't hooked up yet
+      const char* ex_cstr = PyUnicode_AsUTF8(PyObject_Str(PyErr_GetRaisedException()));
+      assert(ex_cstr != nullptr);
+      ERROR_LOG_FMT(SCRIPTING, "Error auto-importing dolio_stdout for stdout: {}", ex_cstr);
     }
     Py::Object result_stderr = Py::Wrap(PyImport_ImportModule("dolio_stderr"));
     if (result_stderr.IsNull())
     {
-      ERROR_LOG_FMT(SCRIPTING, "Error auto-importing dolio_stderr for stderr");
-      PyErr_Print();
+      // get the error string by hand because PyErr_Print wouldn't print anywhere since stderr isn't hooked up yet
+      const char* ex_cstr = PyUnicode_AsUTF8(PyObject_Str(PyErr_GetRaisedException()));
+      assert(ex_cstr != nullptr);
+      ERROR_LOG_FMT(SCRIPTING, "Error auto-importing dolio_stderr for stderr: {}", ex_cstr);
     }
   }
 

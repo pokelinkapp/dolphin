@@ -47,7 +47,10 @@ PyModuleDef MakeStatefulModuleDef(const char* name, PyMethodDef func_defs[])
 {
   auto func = SetupModuleWithState<TState, TSetup>;
   static PyModuleDef_Slot slots_with_exec[] = {
-      {Py_mod_exec, (void*) func}, {0, nullptr} // Sentinel
+      {Py_mod_exec, (void*) func},
+      // TODO felk: double-check I did everything right to support this. See also https://peps.python.org/pep-0489/
+      //{Py_mod_multiple_interpreters, Py_MOD_PER_INTERPRETER_GIL_SUPPORTED},
+      {0, nullptr} // Sentinel
   };
   static PyModuleDef moduleDefinition{
       PyModuleDef_HEAD_INIT,
