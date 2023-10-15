@@ -105,8 +105,8 @@ static void Init(std::filesystem::path script_filepath)
 
   if (PyCoro_CheckExact(execution_result))
   {
-    Py::Object event_module = Py::Wrap(PyImport_ImportModule("dolphin_event"));
-    if (event_module.IsNull())
+    PyObject* event_module = PyImport_ImportModule("dolphin_event");
+    if (event_module == nullptr)
     {
       PyErr_Print();
       return;

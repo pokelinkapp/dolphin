@@ -16,7 +16,7 @@
 namespace PyScripting
 {
 
-void HandleNewCoroutine(const Py::Object module, const Py::Object coro) {
+void HandleNewCoroutine(PyObject* module, const Py::Object coro) {
   PyObject *asyncEventTuple = Py::CallMethod(coro, "send", Py::Take(Py_None).Leak());
   if (asyncEventTuple != nullptr)
   {
@@ -29,7 +29,7 @@ void HandleNewCoroutine(const Py::Object module, const Py::Object coro) {
   }
 }
 
-void HandleCoroutine(const Py::Object module, const Py::Object coro, const Py::Object asyncEventTuple)
+void HandleCoroutine(PyObject* module, const Py::Object coro, const Py::Object asyncEventTuple)
 {
   const char* magic_string;
   const char* event_name;
@@ -59,7 +59,7 @@ void HandleCoroutine(const Py::Object module, const Py::Object coro, const Py::O
     ERROR_LOG_FMT(SCRIPTING, "An unknown event was tried to be awaited: {}", event_name);
     return;
   }
-  std::function<void(const Py::Object, const Py::Object)> scheduler = scheduler_opt.value();
+  std::function<void(PyObject*, const Py::Object)> scheduler = scheduler_opt.value();
   scheduler(module, coro);
 }
 

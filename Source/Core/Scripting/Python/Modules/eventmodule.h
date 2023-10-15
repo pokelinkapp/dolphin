@@ -15,7 +15,7 @@ namespace PyScripting
 
 PyMODINIT_FUNC PyInit_event();
 
-using CoroutineScheduler = void(*)(const Py::Object, const Py::Object);
+using CoroutineScheduler = void(*)(PyObject*, const Py::Object);
 std::optional<CoroutineScheduler> GetCoroutineScheduler(std::string aeventname);
 
 }

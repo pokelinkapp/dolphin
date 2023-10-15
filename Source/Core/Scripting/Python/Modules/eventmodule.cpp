@@ -80,7 +80,7 @@ struct PyEvent;
 template <typename TEvent, typename... TsArgs, MappingFunc<TEvent, TsArgs...> TFunc>
 struct PyEvent<MappingFunc<TEvent, TsArgs...>, TFunc>
 {
-  static std::function<void(const TEvent&)> GetListener(const Py::Object module)
+  static std::function<void(const TEvent&)> GetListener(PyObject* module)
   {
     PyThreadState* threadstate = PyThreadState_Get();
     return [=](const TEvent& event) {
@@ -107,9 +107,9 @@ struct PyEvent<MappingFunc<TEvent, TsArgs...>, TFunc>
         args);
   }
 
-  static void Listener(const Py::Object module, const TEvent& event)
+  static void Listener(PyObject* module, const TEvent& event)
   {
-    EventModuleState* state = Py::GetState<EventModuleState>(module.Lend());
+    EventModuleState* state = Py::GetState<EventModuleState>(module);
     // TODO felk: unregister the event instead of checking for possibly awaiting coroutines here to not have the event's overhead even though there isn't actually anyone listening
     NotifyAwaitingCoroutines(module, event);
     // TODO felk: unregister the event instead of checking for a callback here to not have the event's overhead even though there isn't actually anyone listening
@@ -143,14 +143,14 @@ struct PyEvent<MappingFunc<TEvent, TsArgs...>, TFunc>
     state->GetCallback<TEvent>() = Py::Take(newCallback);
     Py_RETURN_NONE;
   }
-  static void ScheduleCoroutine(Py::Object module, const Py::Object coro)
+  static void ScheduleCoroutine(PyObject* module, const Py::Object coro)
   {
-    EventModuleState* state = Py::GetState<EventModuleState>(module.Lend());
+    EventModuleState* state = Py::GetState<EventModuleState>(module);
     state->GetAwaitingCoroutines<TEvent>().emplace_back(coro);
   }
-  static void NotifyAwaitingCoroutines(const Py::Object module, const TEvent& event)
+  static void NotifyAwaitingCoroutines(PyObject* module, const TEvent& event)
   {
-    EventModuleState* state = Py::GetState<EventModuleState>(module.Lend());
+    EventModuleState* state = Py::GetState<EventModuleState>(module);
     std::deque<Py::Object> awaiting_coroutines;
     std::swap(state->GetAwaitingCoroutines<TEvent>(), awaiting_coroutines);
     while (!awaiting_coroutines.empty())
@@ -184,17 +184,20 @@ template <class... Ts>
 struct PythonEventContainer
 {
 public:
-  static void RegisterListeners(const Py::Object module)
+  static void RegisterListeners(PyObject* module)
   {
-    EventModuleState* state = Py::GetState<EventModuleState>(module.Lend());
+    Py_INCREF(module);
+    EventModuleState* state = Py::GetState<EventModuleState>(module);
     const auto listener_ids = std::apply(
         [&](auto&&... pyevent) {
           return std::make_tuple(state->event_hub->ListenEvent(pyevent.GetListener(module))...);
         },
         s_pyevents);
     state->cleanup_listeners.emplace([=]() {
-      std::apply([&](const auto&... listener_id) { (state->event_hub->UnlistenEvent(listener_id), ...); },
+      std::apply(
+          [&](const auto&... listener_id) { (state->event_hub->UnlistenEvent(listener_id), ...); },
           listener_ids);
+      Py_DECREF(module);
     });
   }
   static void UnregisterListeners(EventModuleState* state)
@@ -298,7 +301,7 @@ async def framedrawn():
   state->event_hub = event_hub;
   const std::function cleanup = [state] { EventContainer::UnregisterListeners(state); };
   PyScripting::PyScriptingBackend::GetCurrent()->AddCleanupFunc(cleanup);
-  EventContainer::RegisterListeners(Py::Take(module));
+  EventContainer::RegisterListeners(module);
 }
 
 static PyObject* Reset(PyObject* module)
