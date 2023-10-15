@@ -82,11 +82,18 @@ struct PyEvent<MappingFunc<TEvent, TsArgs...>, TFunc>
 {
   static std::function<void(const TEvent&)> GetListener(PyObject* module)
   {
-    PyThreadState* threadstate = PyThreadState_Get();
+    PyInterpreterState* interpreter_state = PyThreadState_Get()->interp;
     return [=](const TEvent& event) {
-      PyEval_RestoreThread(threadstate);
+      // TODO felk: Creating a new thread state for each event is unnecessary overhead.
+      // Since all events happen inside the CPU thread anyway, it would be safe to create it once and then reuse it
+      // (using PyEval_RestoreThread and PyEval_SaveThread). We can't use the thread state from outside the lambda
+      // (PyThreadState_Get()), because the listeners (may) get registered from the UI thread at startup,
+      // and a python thread state is only valid in the OS thread it was created in.
+      PyThreadState* thread_state = PyThreadState_New(interpreter_state);
+      PyEval_RestoreThread(thread_state);
       Listener(module, event);
-      PyEval_SaveThread();
+      PyThreadState_Clear(thread_state);
+      PyThreadState_DeleteCurrent();
     };
   }
 
