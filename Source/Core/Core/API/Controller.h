@@ -164,7 +164,7 @@ struct InputOverride
 class BaseManip
 {
 public:
-  BaseManip(API::EventHub& event_hub,
+  BaseManip(std::string manip_name, API::EventHub& event_hub,
             const std::vector<ControllerEmu::EmulatedController*> controllers);
   ~BaseManip();
   ControlState Get(int controller_id, const InputKey& input_key);
@@ -175,6 +175,7 @@ public:
                                                 ControlState orig_state);
 
 private:
+  std::string m_manip_name;
   std::map<std::tuple<int, InputKey>, InputOverride> m_overrides;
   std::map<std::tuple<int, InputKey>, ControlState> m_last_seen_input;
   EventHub& m_event_hub;

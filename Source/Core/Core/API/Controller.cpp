@@ -20,9 +20,9 @@
 namespace API
 {
 
-BaseManip::BaseManip(API::EventHub& event_hub,
+BaseManip::BaseManip(std::string manip_name, API::EventHub& event_hub,
           const std::vector<ControllerEmu::EmulatedController*> controllers)
-    : m_event_hub(event_hub), m_controllers(controllers)
+    : m_manip_name(manip_name), m_event_hub(event_hub), m_controllers(controllers)
 {
   m_frame_advanced_listener = m_event_hub.ListenEvent<API::Events::FrameAdvance>(
       [&](const API::Events::FrameAdvance&) { NotifyFrameAdvanced(); });
@@ -102,7 +102,7 @@ BaseManip& GetGCManip()
     controllers.push_back(controller_config->GetController(i));
   }
 
-  static BaseManip manip(GetEventHub(), std::move(controllers));
+  static BaseManip manip("GC", GetEventHub(), std::move(controllers));
   return manip;
 }
 
@@ -116,7 +116,7 @@ BaseManip& GetWiiManip()
     controllers.push_back(controller_config->GetController(i));
   }
 
-  static BaseManip manip(GetEventHub(), std::move(controllers));
+  static BaseManip manip("Wiimote", GetEventHub(), std::move(controllers));
   return manip;
 }
 
@@ -136,7 +136,7 @@ BaseManip& GetWiiClassicManip()
     controllers.push_back(classic_controller);
   }
 
-  static BaseManip manip(GetEventHub(), std::move(controllers));
+  static BaseManip manip("Wii Classic", GetEventHub(), std::move(controllers));
   return manip;
 }
 
@@ -156,7 +156,7 @@ BaseManip& GetWiiNunchukManip()
     controllers.push_back(nunchuk_controller);
   }
 
-  static BaseManip manip(GetEventHub(), std::move(controllers));
+  static BaseManip manip("Nunchuk", GetEventHub(), std::move(controllers));
   return manip;
 }
 
@@ -170,7 +170,7 @@ BaseManip& GetGBAManip()
     controllers.push_back(controller_config->GetController(i));
   }
 
-  static BaseManip manip(GetEventHub(), std::move(controllers));
+  static BaseManip manip("GBA", GetEventHub(), std::move(controllers));
   return manip;
 }
 
