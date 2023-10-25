@@ -17,9 +17,6 @@
     <ClCompile Include="Python\Modules\memorymodule.cpp">
       <Filter>Python\Modules</Filter>
     </ClCompile>
-    <ClCompile Include="Python\coroutine.cpp">
-      <Filter>Python</Filter>
-    </ClCompile>
     <ClCompile Include="Python\Utils\object_wrapper.cpp">
       <Filter>Python\Utils</Filter>
     </ClCompile>
@@ -38,9 +35,6 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ScriptingEngine.h" />
-    <ClInclude Include="Python\coroutine.h">
-      <Filter>Python</Filter>
-    </ClInclude>
     <ClInclude Include="Python\Modules\doliomodule.h">
       <Filter>Python\Modules</Filter>
     </ClInclude>

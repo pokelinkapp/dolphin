@@ -13,9 +13,15 @@
 namespace PyScripting
 {
 
+// Handle a not-yet-started coroutine that was returned by normal
+// script execution (top-level await) or an async callback.
+// Those need to get started by initially calling "send" with None
+// and then hand them over to HandleCoroutine.
+void HandleNewCoroutine(PyObject* module, PyObject* coro);
+
 PyMODINIT_FUNC PyInit_event();
 
-using CoroutineScheduler = void(*)(PyObject*, const Py::Object);
+using CoroutineScheduler = void(*)(PyObject*, PyObject*);
 std::optional<CoroutineScheduler> GetCoroutineScheduler(std::string aeventname);
 
 }

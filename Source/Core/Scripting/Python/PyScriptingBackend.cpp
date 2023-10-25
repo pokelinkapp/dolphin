@@ -11,7 +11,6 @@
 #include "Common/Logging/Log.h"
 #include "Common/StringUtil.h"
 
-#include "Scripting/Python/coroutine.h"
 #include "Scripting/Python/Modules/controllermodule.h"
 #include "Scripting/Python/Modules/doliomodule.h"
 #include "Scripting/Python/Modules/dolphinmodule.h"
@@ -111,7 +110,7 @@ static void Init(std::filesystem::path script_filepath)
       PyErr_Print();
       return;
     }
-    HandleNewCoroutine(event_module, Py::Wrap(execution_result));
+    HandleNewCoroutine(event_module, execution_result);
   }
 }
 

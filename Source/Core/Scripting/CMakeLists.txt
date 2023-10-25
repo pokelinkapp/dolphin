@@ -1,8 +1,6 @@
 add_library(scripting
   ScriptingEngine.cpp
   ScriptingEngine.h
-  Python/coroutine.cpp
-  Python/coroutine.h
   Python/PyScriptingBackend.cpp
   Python/PyScriptingBackend.h
   Python/Modules/controllermodule.cpp

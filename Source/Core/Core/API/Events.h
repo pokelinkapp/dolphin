@@ -6,6 +6,8 @@
 
 #include <functional>
 #include <mutex>
+#include <map>
+#include <ranges>
 
 #include "Common/Assert.h"
 #include "Core/Core.h"
@@ -59,6 +61,9 @@ template <typename T>
 struct ListenerID
 {
   u64 value;
+
+  bool operator==(const ListenerID& o) const { return value == o.value; }
+  bool operator<(const ListenerID& o) const { return value < o.value; }
 };
 
 // an event container manages a single event type
@@ -68,7 +73,7 @@ class EventContainer final
 public:
   bool HasListeners()
   {
-    return !m_listener_pairs.empty() || !m_one_time_listeners.empty();
+    return !m_listeners.empty();
   }
 
   void EmitEvent(T evt)
@@ -93,40 +98,24 @@ public:
     // Just to be sure, have some guards against concurrent modifications.
     std::lock_guard lock{m_listeners_iterate_mutex};
     // avoid concurrent modification issues by iterating over a copy
-    std::vector<std::pair<ListenerID<T>, Listener<T>>> listener_pairs = m_listener_pairs;
-    for (auto& listener_pair : listener_pairs)
-      listener_pair.second(evt);
-    // avoid concurrent modification issues by performing a swap
-    // with an fresh empty vector.
-    std::vector<Listener<T>> one_time_listeners;
-    std::swap(one_time_listeners, m_one_time_listeners);
-    for (auto& listener : one_time_listeners)
+    auto view = m_listeners | std::views::values;
+    for (const auto copy = std::vector<Listener<T>>(view.begin(), view.end());
+         const Listener<T>& listener : copy)
+    {
       listener(evt);
+    }
   }
 
   ListenerID<T> ListenEvent(Listener<T> listener)
   {
     auto id = ListenerID<T>{m_next_listener_id++};
-    m_listener_pairs.emplace_back(std::pair<ListenerID<T>, Listener<T>>(id, std::move(listener)));
+    m_listeners[id] = std::move(listener);
     return id;
   }
 
   bool UnlistenEvent(ListenerID<T> listener_id)
   {
-    for (auto it = m_listener_pairs.begin(); it != m_listener_pairs.end(); ++it)
-    {
-      if (it->first.value == listener_id.value)
-      {
-        m_listener_pairs.erase(it);
-        return true;
-      }
-    }
-    return false;
-  }
-
-  void ListenEventOnce(Listener<T> listener)
-  {
-    m_one_time_listeners.emplace_back(std::move(listener));
+    return m_listeners.erase(listener_id) > 0;
   }
 
   void TickListeners()
@@ -135,8 +124,7 @@ public:
   }
 private:
   std::mutex m_listeners_iterate_mutex{};
-  std::vector<std::pair<ListenerID<T>, Listener<T>>> m_listener_pairs{};
-  std::vector<Listener<T>> m_one_time_listeners{};
+  std::map<ListenerID<T>, Listener<T>> m_listeners{};
   u64 m_next_listener_id = 0;
 };
 
@@ -175,12 +163,6 @@ public:
   bool UnlistenEvent(ListenerID<T> listener_id)
   {
     return GetEventContainer<T>().UnlistenEvent(listener_id);
-  }
-
-  template <typename T>
-  void ListenEventOnce(Listener<T> listener)
-  {
-    GetEventContainer<T>().ListenEventOnce(listener);
   }
 
   void TickAllListeners()

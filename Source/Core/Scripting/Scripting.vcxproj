@@ -25,7 +25,6 @@
   <Import Project="$(ExternalsDir)imgui\exports.props" />
   <Import Project="$(ExternalsDir)fmt\exports.props" />
   <ItemGroup>
-    <ClCompile Include="Python\coroutine.cpp" />
     <ClCompile Include="Python\Modules\controllermodule.cpp" />
     <ClCompile Include="Python\Modules\doliomodule.cpp" />
     <ClCompile Include="Python\Modules\dolphinmodule.cpp" />
@@ -39,7 +38,6 @@
     <ClCompile Include="ScriptingEngine.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Python\coroutine.h" />
     <ClInclude Include="Python\Modules\controllermodule.h" />
     <ClInclude Include="Python\Modules\doliomodule.h" />
     <ClInclude Include="Python\Modules\dolphinmodule.h" />
