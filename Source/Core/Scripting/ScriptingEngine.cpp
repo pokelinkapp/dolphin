@@ -6,6 +6,7 @@
 
 #include "Core/API/Events.h"
 #include "Core/API/Gui.h"
+#include "Core/System.h"
 #include "Common/Logging/Log.h"
 #include "Python/PyScriptingBackend.h"
 
@@ -19,6 +20,7 @@ ScriptingBackend::ScriptingBackend(std::filesystem::path script_filepath)
   // If there was support for multiple backend, a fitting one could be
   // detected based on the script file's extension for example.
   m_state = new PyScripting::PyScriptingBackend(script_filepath, API::GetEventHub(), API::GetGui(),
+                                                Core::System::GetInstance(),
                                                 API::GetGCManip(), API::GetWiiManip(), API::GetWiiClassicManip(),
                                                 API::GetWiiNunchukManip(), API::GetGBAManip());
 }

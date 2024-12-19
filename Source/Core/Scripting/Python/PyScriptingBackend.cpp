@@ -124,10 +124,11 @@ static void ShutdownMainPythonInterpreter()
 
 PyScriptingBackend::PyScriptingBackend(std::filesystem::path script_filepath,
                                        API::EventHub& event_hub, API::Gui& gui,
+                                       Core::System& system,
                                        API::BaseManip& gc_manip, API::BaseManip& wii_manip,
                                        API::BaseManip& wii_classic_manip, API::BaseManip& wii_nunchuk_manip,
                                        API::BaseManip& gba_manip)
-    : m_event_hub(event_hub), m_gui(gui), m_gc_manip(gc_manip), m_wii_manip(wii_manip),
+    : m_event_hub(event_hub), m_gui(gui), m_system(system), m_gc_manip(gc_manip), m_wii_manip(wii_manip),
     m_wii_classic_manip(wii_classic_manip), m_wii_nunchuk_manip(wii_nunchuk_manip), m_gba_manip(gba_manip)
 {
   std::lock_guard lock{s_bookkeeping_lock};
@@ -276,6 +277,11 @@ API::EventHub* PyScriptingBackend::GetEventHub()
 API::Gui* PyScriptingBackend::GetGui()
 {
   return &m_gui;
+}
+
+Core::System* PyScriptingBackend::GetSystem()
+{
+  return &m_system;
 }
 
 API::BaseManip* PyScriptingBackend::GetGCManip()

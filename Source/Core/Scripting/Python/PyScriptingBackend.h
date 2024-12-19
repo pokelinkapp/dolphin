@@ -20,12 +20,14 @@ class PyScriptingBackend
 {
 public:
   PyScriptingBackend(std::filesystem::path script_filepath, API::EventHub& event_hub, API::Gui& gui,
+                     Core::System& system,
                      API::BaseManip& gc_manip, API::BaseManip& wii_manip, API::BaseManip& wii_classic_manip,
                      API::BaseManip& wii_nunchuk_manip, API::BaseManip& gba_manip);
   ~PyScriptingBackend();
   static PyScriptingBackend* GetCurrent();
   API::EventHub* GetEventHub();
   API::Gui* GetGui();
+  Core::System* GetSystem();
   API::BaseManip* GetGCManip();
   API::BaseManip* GetWiiManip();
   API::BaseManip* GetWiiClassicManip();
@@ -50,6 +52,7 @@ private:
   PyThreadState* m_interp_threadstate;
   API::EventHub& m_event_hub;
   API::Gui& m_gui;
+  Core::System& m_system;
   API::BaseManip& m_gc_manip;
   API::BaseManip& m_wii_manip;
   API::BaseManip& m_wii_classic_manip;

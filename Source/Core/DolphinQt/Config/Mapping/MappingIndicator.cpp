@@ -419,7 +419,7 @@ void AnalogStickIndicator::Draw()
 
 void TiltIndicator::Update(float elapsed_seconds)
 {
-  WiimoteEmu::EmulateTilt(&m_motion_state, &m_group, elapsed_seconds);
+  WiimoteEmu::EmulateTilt(&m_motion_state, &m_group, nullptr, elapsed_seconds);
 }
 
 void TiltIndicator::Draw()
@@ -573,7 +573,7 @@ void SwingIndicator::DrawUnderGate(QPainter& p)
 
 void SwingIndicator::Update(float elapsed_seconds)
 {
-  WiimoteEmu::EmulateSwing(&m_motion_state, &m_swing_group, elapsed_seconds);
+  WiimoteEmu::EmulateSwing(&m_motion_state, &m_swing_group, nullptr, elapsed_seconds);
 }
 
 void SwingIndicator::Draw()
@@ -584,7 +584,7 @@ void SwingIndicator::Draw()
 
 void ShakeMappingIndicator::Update(float elapsed_seconds)
 {
-  WiimoteEmu::EmulateShake(&m_motion_state, &m_shake_group, elapsed_seconds);
+  WiimoteEmu::EmulateShake(&m_motion_state, &m_shake_group, nullptr, elapsed_seconds);
 
   for (auto& sample : m_position_samples)
     sample.age += elapsed_seconds;

@@ -180,7 +180,7 @@ void OnFrameEnd(Core::System& system)
 #endif
 }
 
-void OnFrameBegin()
+void OnFrameBegin(Core::System& system)
 {
   API::GetEventHub().EmitEvent(API::Events::FrameAdvance{});
 }

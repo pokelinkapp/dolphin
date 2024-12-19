@@ -338,10 +338,11 @@ static PyObject* Reset(PyObject* module)
 
 static PyObject* SystemReset(PyObject* self)
 {
-  // Copy from DolphinQt/MainWindow.cpp: MainWindow::Reset()
-  if (Movie::IsRecordingInput())
-    Movie::SetReset(true);
   auto& system = Core::System::GetInstance();
+  // Copy from DolphinQt/MainWindow.cpp: MainWindow::Reset()
+  auto& movie = system.GetMovie();
+  if (movie.IsRecordingInput())
+    movie.SetReset(true);
   system.GetProcessorInterface().ResetButton_Tap();
   Py_RETURN_NONE;
 }
