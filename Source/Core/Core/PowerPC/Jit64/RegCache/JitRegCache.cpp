@@ -109,19 +109,6 @@ OpArg RCOpArg::Location() const
   return {};
 }
 
-OpArg RCOpArg::ExtractWithByteOffset(int offset)
-{
-  if (offset == 0)
-    return Location();
-
-  ASSERT(rc);
-  const preg_t preg = std::get<preg_t>(contents);
-  rc->StoreFromRegister(preg, RegCache::FlushMode::MaintainState);
-  OpArg result = rc->GetDefaultLocation(preg);
-  result.AddMemOffset(offset);
-  return result;
-}
-
 void RCOpArg::Unlock()
 {
   if (const preg_t* preg = std::get_if<preg_t>(&contents))
@@ -404,7 +391,7 @@ void RegCache::Discard(BitSet32 pregs)
   }
 }
 
-void RegCache::Flush(BitSet32 pregs)
+void RegCache::Flush(BitSet32 pregs, IgnoreDiscardedRegisters ignore_discarded_registers)
 {
   ASSERT_MSG(
       DYNA_REC,
@@ -423,7 +410,8 @@ void RegCache::Flush(BitSet32 pregs)
     case PPCCachedReg::LocationType::Default:
       break;
     case PPCCachedReg::LocationType::Discarded:
-      ASSERT_MSG(DYNA_REC, false, "Attempted to flush discarded PPC reg {}", i);
+      ASSERT_MSG(DYNA_REC, ignore_discarded_registers != IgnoreDiscardedRegisters::No,
+                 "Attempted to flush discarded PPC reg {}", i);
       break;
     case PPCCachedReg::LocationType::SpeculativeImmediate:
       // We can have a cached value without a host register through speculative constants.
@@ -592,29 +580,25 @@ void RegCache::StoreFromRegister(preg_t i, FlushMode mode)
 
 X64Reg RegCache::GetFreeXReg()
 {
-  size_t aCount;
-  const X64Reg* aOrder = GetAllocationOrder(&aCount);
-  for (size_t i = 0; i < aCount; i++)
+  const auto order = GetAllocationOrder();
+  for (const X64Reg xr : order)
   {
-    X64Reg xr = aOrder[i];
     if (m_xregs[xr].IsFree())
-    {
       return xr;
-    }
   }
 
-  // Okay, not found; run the register allocator heuristic and figure out which register we should
-  // clobber.
+  // Okay, not found; run the register allocator heuristic and
+  // figure out which register we should clobber.
   float min_score = std::numeric_limits<float>::max();
   X64Reg best_xreg = INVALID_REG;
   size_t best_preg = 0;
-  for (size_t i = 0; i < aCount; i++)
+  for (const X64Reg xreg : order)
   {
-    X64Reg xreg = (X64Reg)aOrder[i];
-    preg_t preg = m_xregs[xreg].Contents();
+    const preg_t preg = m_xregs[xreg].Contents();
     if (m_xregs[xreg].IsLocked() || m_regs[preg].IsLocked())
       continue;
-    float score = ScoreRegister(xreg);
+
+    const float score = ScoreRegister(xreg);
     if (score < min_score)
     {
       min_score = score;
@@ -637,11 +621,11 @@ X64Reg RegCache::GetFreeXReg()
 int RegCache::NumFreeRegisters() const
 {
   int count = 0;
-  size_t aCount;
-  const X64Reg* aOrder = GetAllocationOrder(&aCount);
-  for (size_t i = 0; i < aCount; i++)
-    if (m_xregs[aOrder[i]].IsFree())
+  for (const X64Reg reg : GetAllocationOrder())
+  {
+    if (m_xregs[reg].IsFree())
       count++;
+  }
   return count;
 }
 

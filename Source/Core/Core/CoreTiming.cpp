@@ -16,29 +16,22 @@
 #include "Common/Logging/Log.h"
 #include "Common/SPSCQueue.h"
 
+#include "Core/AchievementManager.h"
 #include "Core/CPUThreadConfigCallback.h"
+#include "Core/Config/AchievementSettings.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
 
 #include "VideoCommon/Fifo.h"
+#include "VideoCommon/OnScreenDisplay.h"
 #include "VideoCommon/PerformanceMetrics.h"
 #include "VideoCommon/VideoBackendBase.h"
 #include "VideoCommon/VideoConfig.h"
 
 namespace CoreTiming
 {
-// Sort by time, unless the times are the same, in which case sort by the order added to the queue
-static bool operator>(const Event& left, const Event& right)
-{
-  return std::tie(left.time, left.fifo_order) > std::tie(right.time, right.fifo_order);
-}
-static bool operator<(const Event& left, const Event& right)
-{
-  return std::tie(left.time, left.fifo_order) < std::tie(right.time, right.fifo_order);
-}
-
 static constexpr int MAX_SLICE_LENGTH = 20000;
 
 static void EmptyTimedCallback(Core::System& system, u64 userdata, s64 cyclesLate)
@@ -70,7 +63,7 @@ EventType* CoreTimingManager::RegisterEvent(const std::string& name, TimedCallba
 {
   // check for existing type with same name.
   // we want event type names to remain unique so that we can use them for serialization.
-  ASSERT_MSG(POWERPC, m_event_types.find(name) == m_event_types.end(),
+  ASSERT_MSG(POWERPC, !m_event_types.contains(name),
              "CoreTiming Event \"{}\" is already registered. Events should only be registered "
              "during Init to avoid breaking save states.",
              name);
@@ -135,6 +128,15 @@ void CoreTimingManager::RefreshConfig()
 
   m_max_variance = std::chrono::duration_cast<DT>(DT_ms(Config::Get(Config::MAIN_TIMING_VARIANCE)));
 
+  if (AchievementManager::GetInstance().IsHardcoreModeActive() &&
+      Config::Get(Config::MAIN_EMULATION_SPEED) < 1.0f &&
+      Config::Get(Config::MAIN_EMULATION_SPEED) > 0.0f)
+  {
+    Config::SetCurrent(Config::MAIN_EMULATION_SPEED, 1.0f);
+    m_emulation_speed = 1.0f;
+    OSD::AddMessage("Minimum speed is 100% in Hardcore Mode");
+  }
+
   m_emulation_speed = Config::Get(Config::MAIN_EMULATION_SPEED);
 }
 
@@ -193,7 +195,7 @@ void CoreTimingManager::DoState(PointerWrap& p)
     // When loading from a save state, we must assume the Event order is random and meaningless.
     // The exact layout of the heap in memory is implementation defined, therefore it is platform
     // and library version specific.
-    std::make_heap(m_event_queue.begin(), m_event_queue.end(), std::greater<Event>());
+    std::ranges::make_heap(m_event_queue, std::ranges::greater{});
 
     // The stave state has changed the time, so our previous Throttle targets are invalid.
     // Especially when global_time goes down; So we create a fake throttle update.
@@ -251,7 +253,7 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
       ForceExceptionCheck(cycles_into_future);
 
     m_event_queue.emplace_back(Event{timeout, m_event_fifo_id++, userdata, event_type});
-    std::push_heap(m_event_queue.begin(), m_event_queue.end(), std::greater<Event>());
+    std::ranges::push_heap(m_event_queue, std::ranges::greater{});
   }
   else
   {
@@ -270,14 +272,13 @@ void CoreTimingManager::ScheduleEvent(s64 cycles_into_future, EventType* event_t
 
 void CoreTimingManager::RemoveEvent(EventType* event_type)
 {
-  auto itr = std::remove_if(m_event_queue.begin(), m_event_queue.end(),
-                            [&](const Event& e) { return e.type == event_type; });
+  const size_t erased =
+      std::erase_if(m_event_queue, [&](const Event& e) { return e.type == event_type; });
 
   // Removing random items breaks the invariant so we have to re-establish it.
-  if (itr != m_event_queue.end())
+  if (erased != 0)
   {
-    m_event_queue.erase(itr, m_event_queue.end());
-    std::make_heap(m_event_queue.begin(), m_event_queue.end(), std::greater<Event>());
+    std::ranges::make_heap(m_event_queue, std::ranges::greater{});
   }
 }
 
@@ -306,7 +307,7 @@ void CoreTimingManager::MoveEvents()
   {
     ev.fifo_order = m_event_fifo_id++;
     m_event_queue.emplace_back(std::move(ev));
-    std::push_heap(m_event_queue.begin(), m_event_queue.end(), std::greater<Event>());
+    std::ranges::push_heap(m_event_queue, std::ranges::greater{});
   }
 }
 
@@ -330,7 +331,7 @@ void CoreTimingManager::Advance()
   while (!m_event_queue.empty() && m_event_queue.front().time <= m_globals.global_timer)
   {
     Event evt = std::move(m_event_queue.front());
-    std::pop_heap(m_event_queue.begin(), m_event_queue.end(), std::greater<Event>());
+    std::ranges::pop_heap(m_event_queue, std::ranges::greater{});
     m_event_queue.pop_back();
 
     Throttle(evt.time);
@@ -429,7 +430,7 @@ bool CoreTimingManager::UseSyncOnSkipIdle() const
 void CoreTimingManager::LogPendingEvents() const
 {
   auto clone = m_event_queue;
-  std::sort(clone.begin(), clone.end());
+  std::ranges::sort(clone);
   for (const Event& ev : clone)
   {
     INFO_LOG_FMT(POWERPC, "PENDING: Now: {} Pending: {} Type: {}", m_globals.global_timer, ev.time,
@@ -452,17 +453,15 @@ void CoreTimingManager::AdjustEventQueueTimes(u32 new_ppc_clock, u32 old_ppc_clo
 
 void CoreTimingManager::Idle()
 {
-  auto& system = m_system;
-  auto& ppc_state = m_system.GetPPCState();
-
   if (m_config_sync_on_skip_idle)
   {
     // When the FIFO is processing data we must not advance because in this way
     // the VI will be desynchronized. So, We are waiting until the FIFO finish and
     // while we process only the events required by the FIFO.
-    system.GetFifo().FlushGpu(system);
+    m_system.GetFifo().FlushGpu();
   }
 
+  auto& ppc_state = m_system.GetPPCState();
   PowerPC::UpdatePerformanceMonitor(ppc_state.downcount, 0, 0, ppc_state);
   m_idled_cycles += DowncountToCycles(ppc_state.downcount);
   ppc_state.downcount = 0;
@@ -474,7 +473,7 @@ std::string CoreTimingManager::GetScheduledEventsSummary() const
   text.reserve(1000);
 
   auto clone = m_event_queue;
-  std::sort(clone.begin(), clone.end());
+  std::ranges::sort(clone);
   for (const Event& ev : clone)
   {
     text += fmt::format("{} : {} {:016x}\n", *ev.type->name, ev.time, ev.userdata);

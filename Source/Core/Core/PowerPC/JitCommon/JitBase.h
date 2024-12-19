@@ -5,9 +5,12 @@
 
 #include <array>
 #include <cstddef>
+#include <iosfwd>
 #include <map>
+#include <string_view>
 #include <unordered_set>
 #include <utility>
+#include <vector>
 
 #include "Common/BitSet.h"
 #include "Common/CommonTypes.h"
@@ -23,13 +26,15 @@
 
 namespace Core
 {
+class BranchWatch;
 class System;
-}
+}  // namespace Core
 namespace PowerPC
 {
 class MMU;
 struct PowerPCState;
 }  // namespace PowerPC
+class PPCSymbolDB;
 
 //#define JIT_LOG_GENERATED_CODE  // Enables logging of generated code
 //#define JIT_LOG_GPR             // Enables logging of the PPC general purpose regs
@@ -84,15 +89,13 @@ protected:
     bool memcheck;
     bool fp_exceptions;
     bool div_by_zero_exceptions;
-    bool profile_blocks;
   };
   struct JitState
   {
     u32 compilerPC;
     u32 blockStart;
-    int instructionNumber;
     int instructionsLeft;
-    int downcountAmount;
+    u32 downcountAmount;
     u32 numLoadStoreInst;
     u32 numFloatingPointInst;
     // If this is set, we need to generate an exception handler for the fastmem load.
@@ -147,6 +150,7 @@ protected:
   bool bJITSystemRegistersOff = false;
   bool bJITBranchOff = false;
   bool bJITRegisterCacheOff = false;
+  bool m_enable_profiling = false;
   bool m_enable_debugging = false;
   bool m_enable_branch_following = false;
   bool m_enable_float_exceptions = false;
@@ -161,16 +165,12 @@ protected:
   bool m_cleanup_after_stackfault = false;
   u8* m_stack_guard = nullptr;
 
-  static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 22> JIT_SETTINGS;
-
-  enum class InitFastmemArena
-  {
-    No,
-    Yes,
-  };
+  static const std::array<std::pair<bool JitBase::*, const Config::Info<bool>*>, 23> JIT_SETTINGS;
 
   bool DoesConfigNeedRefresh();
-  void RefreshConfig(InitFastmemArena init_fastmem_arena);
+  void RefreshConfig();
+
+  void InitFastmemArena();
 
   void InitBLROptimization();
   void ProtectStack();
@@ -189,12 +189,22 @@ public:
   JitBase& operator=(JitBase&&) = delete;
   ~JitBase() override;
 
+  bool IsProfilingEnabled() const { return m_enable_profiling; }
   bool IsDebuggingEnabled() const { return m_enable_debugging; }
 
   static const u8* Dispatch(JitBase& jit);
   virtual JitBaseBlockCache* GetBlockCache() = 0;
 
   virtual void Jit(u32 em_address) = 0;
+
+  virtual void EraseSingleBlock(const JitBlock& block) = 0;
+
+  // Memory region name, free size, and fragmentation ratio
+  using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
+  virtual std::vector<MemoryStats> GetMemoryStats() const = 0;
+
+  virtual std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const = 0;
+  virtual std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const = 0;
 
   virtual const CommonAsmRoutinesBase* GetAsmRoutines() = 0;
 
@@ -210,6 +220,8 @@ public:
   Core::System& m_system;
   PowerPC::PowerPCState& m_ppc_state;
   PowerPC::MMU& m_mmu;
+  Core::BranchWatch& m_branch_watch;
+  PPCSymbolDB& m_ppc_symbol_db;
 };
 
 void JitTrampoline(JitBase& jit, u32 em_address);

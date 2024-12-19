@@ -15,8 +15,10 @@
 #include "Common/Config/Config.h"
 #include "Common/FileUtil.h"
 
+#include "Core/AchievementManager.h"
 #include "Core/Config/MainSettings.h"
-#include "Core/ConfigManager.h"
+#include "Core/Core.h"
+#include "Core/Host.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PowerPC.h"
 #include "Core/System.h"
@@ -30,27 +32,9 @@ bool operator==(const GeckoCode& lhs, const GeckoCode& rhs)
   return lhs.codes == rhs.codes;
 }
 
-bool operator!=(const GeckoCode& lhs, const GeckoCode& rhs)
-{
-  return !operator==(lhs, rhs);
-}
-
 bool operator==(const GeckoCode::Code& lhs, const GeckoCode::Code& rhs)
 {
   return std::tie(lhs.address, lhs.data) == std::tie(rhs.address, rhs.data);
-}
-
-bool operator!=(const GeckoCode::Code& lhs, const GeckoCode::Code& rhs)
-{
-  return !operator==(lhs, rhs);
-}
-
-// return true if a code exists
-bool GeckoCode::Exist(u32 address, u32 data) const
-{
-  return std::find_if(codes.begin(), codes.end(), [&](const Code& code) {
-           return code.address == address && code.data == data;
-         }) != codes.end();
 }
 
 enum class Installation
@@ -66,16 +50,20 @@ static std::vector<GeckoCode> s_active_codes;
 static std::vector<GeckoCode> s_synced_codes;
 static std::mutex s_active_codes_lock;
 
-void SetActiveCodes(std::span<const GeckoCode> gcodes)
+void SetActiveCodes(std::span<const GeckoCode> gcodes, const std::string& game_id)
 {
   std::lock_guard lk(s_active_codes_lock);
 
   s_active_codes.clear();
-  if (Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (Config::AreCheatsEnabled())
   {
     s_active_codes.reserve(gcodes.size());
+
     std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_active_codes),
-                 [](const GeckoCode& code) { return code.enabled; });
+                 [&game_id](const GeckoCode& code) {
+                   return code.enabled &&
+                          AchievementManager::GetInstance().CheckApprovedGeckoCode(code, game_id);
+                 });
   }
   s_active_codes.shrink_to_fit();
 
@@ -103,7 +91,7 @@ std::vector<GeckoCode> SetAndReturnActiveCodes(std::span<const GeckoCode> gcodes
   std::lock_guard lk(s_active_codes_lock);
 
   s_active_codes.clear();
-  if (Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (Config::AreCheatsEnabled())
   {
     s_active_codes.reserve(gcodes.size());
     std::copy_if(gcodes.begin(), gcodes.end(), std::back_inserter(s_active_codes),
@@ -135,7 +123,7 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   }
 
   u8 mmio_addr = 0xCC;
-  if (SConfig::GetInstance().bWii)
+  if (guard.GetSystem().IsWii())
   {
     mmio_addr = 0xCD;
   }
@@ -145,7 +133,7 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
     PowerPC::MMU::HostWrite_U8(guard, data[i], INSTALLER_BASE_ADDRESS + i);
 
   // Patch the code handler to the current system type (Gamecube/Wii)
-  for (unsigned int h = 0; h < data.length(); h += 4)
+  for (u32 h = 0; h < data.length(); h += 4)
   {
     // Patch MMIO address
     if (PowerPC::MMU::HostRead_U32(guard, INSTALLER_BASE_ADDRESS + h) ==
@@ -206,14 +194,15 @@ static Installation InstallCodeHandlerLocked(const Core::CPUThreadGuard& guard)
   // Turn on codes
   PowerPC::MMU::HostWrite_U8(guard, 1, INSTALLER_BASE_ADDRESS + 7);
 
-  auto& system = Core::System::GetInstance();
-  auto& ppc_state = system.GetPPCState();
-
   // Invalidate the icache and any asm codes
-  for (unsigned int j = 0; j < (INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS); j += 32)
+  auto& ppc_state = guard.GetSystem().GetPPCState();
+  auto& memory = guard.GetSystem().GetMemory();
+  auto& jit_interface = guard.GetSystem().GetJitInterface();
+  for (u32 j = 0; j < (INSTALLER_END_ADDRESS - INSTALLER_BASE_ADDRESS); j += 32)
   {
-    ppc_state.iCache.Invalidate(INSTALLER_BASE_ADDRESS + j);
+    ppc_state.iCache.Invalidate(memory, jit_interface, INSTALLER_BASE_ADDRESS + j);
   }
+  Host_JitCacheInvalidation();
   return Installation::Installed;
 }
 
@@ -238,7 +227,7 @@ void Shutdown()
 
 void RunCodeHandler(const Core::CPUThreadGuard& guard)
 {
-  if (!Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (!Config::AreCheatsEnabled())
     return;
 
   // NOTE: Need to release the lock because of GUI deadlocks with PanicAlert in HostWrite_*
@@ -258,8 +247,7 @@ void RunCodeHandler(const Core::CPUThreadGuard& guard)
     }
   }
 
-  auto& system = Core::System::GetInstance();
-  auto& ppc_state = system.GetPPCState();
+  auto& ppc_state = guard.GetSystem().GetPPCState();
 
   // We always do this to avoid problems with the stack since we're branching in random locations.
   // Even with function call return hooks (PC == LR), hand coded assembler won't necessarily
@@ -281,7 +269,7 @@ void RunCodeHandler(const Core::CPUThreadGuard& guard)
   PowerPC::MMU::HostWrite_U32(guard, LR(ppc_state), SP + 16);
   PowerPC::MMU::HostWrite_U32(guard, ppc_state.cr.Get(), SP + 20);
   // Registers FPR0->13 are volatile
-  for (int i = 0; i < 14; ++i)
+  for (u32 i = 0; i < 14; ++i)
   {
     PowerPC::MMU::HostWrite_U64(guard, ppc_state.ps[i].PS0AsU64(), SP + 24 + 2 * i * sizeof(u64));
     PowerPC::MMU::HostWrite_U64(guard, ppc_state.ps[i].PS1AsU64(),

@@ -143,7 +143,7 @@ enum class FileLookupMode
 static SystemTimers::TimeBaseTick EstimateFileLookupTicks(const std::string& path,
                                                           FileLookupMode mode)
 {
-  const size_t number_of_path_components = std::count(path.cbegin(), path.cend(), '/');
+  const size_t number_of_path_components = std::ranges::count(path, '/');
   if (number_of_path_components == 0)
     return 0_tbticks;
 
@@ -326,8 +326,8 @@ std::optional<IPCReply> FSDevice::Read(const ReadWriteRequest& request)
   return MakeIPCReply([&](Ticks t) {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    return m_core.Read(request.fd, memory.GetPointer(request.buffer), request.size, request.buffer,
-                       t);
+    return m_core.Read(request.fd, memory.GetPointerForRange(request.buffer, request.size),
+                       request.size, request.buffer, t);
   });
 }
 
@@ -357,8 +357,8 @@ std::optional<IPCReply> FSDevice::Write(const ReadWriteRequest& request)
   return MakeIPCReply([&](Ticks t) {
     auto& system = GetSystem();
     auto& memory = system.GetMemory();
-    return m_core.Write(request.fd, memory.GetPointer(request.buffer), request.size, request.buffer,
-                        t);
+    return m_core.Write(request.fd, memory.GetPointerForRange(request.buffer, request.size),
+                        request.size, request.buffer, t);
   });
 }
 

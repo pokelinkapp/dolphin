@@ -22,6 +22,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <bit>
 #include <iterator>
 #include <mutex>
 #include <string>
@@ -31,7 +32,6 @@
 
 #include <fmt/format.h>
 
-#include "Common/BitUtils.h"
 #include "Common/CommonTypes.h"
 #include "Common/Config/Config.h"
 #include "Common/IniFile.h"
@@ -39,6 +39,7 @@
 #include "Common/MsgHandler.h"
 
 #include "Core/ARDecrypt.h"
+#include "Core/AchievementManager.h"
 #include "Core/CheatCodes.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/PowerPC/MMU.h"
@@ -112,16 +113,19 @@ struct ARAddr
 
 // ----------------------
 // AR Remote Functions
-void ApplyCodes(std::span<const ARCode> codes)
+void ApplyCodes(std::span<const ARCode> codes, const std::string& game_id)
 {
-  if (!Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (!Config::AreCheatsEnabled())
     return;
 
   std::lock_guard guard(s_lock);
   s_disable_logging = false;
   s_active_codes.clear();
   std::copy_if(codes.begin(), codes.end(), std::back_inserter(s_active_codes),
-               [](const ARCode& code) { return code.enabled; });
+               [&game_id](const ARCode& code) {
+                 return code.enabled &&
+                        AchievementManager::GetInstance().CheckApprovedARCode(code, game_id);
+               });
   s_active_codes.shrink_to_fit();
 }
 
@@ -143,7 +147,7 @@ void UpdateSyncedCodes(std::span<const ARCode> codes)
 
 std::vector<ARCode> ApplyAndReturnCodes(std::span<const ARCode> codes)
 {
-  if (Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (Config::AreCheatsEnabled())
   {
     std::lock_guard guard(s_lock);
     s_disable_logging = false;
@@ -158,7 +162,7 @@ std::vector<ARCode> ApplyAndReturnCodes(std::span<const ARCode> codes)
 
 void AddCode(ARCode code)
 {
-  if (!Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (!Config::AreCheatsEnabled())
     return;
 
   if (code.enabled)
@@ -169,9 +173,10 @@ void AddCode(ARCode code)
   }
 }
 
-void LoadAndApplyCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini)
+void LoadAndApplyCodes(const Common::IniFile& global_ini, const Common::IniFile& local_ini,
+                       const std::string& game_id)
 {
-  ApplyCodes(LoadCodes(global_ini, local_ini));
+  ApplyCodes(LoadCodes(global_ini, local_ini), game_id);
 }
 
 // Parses the Action Replay section of a game ini file.
@@ -519,10 +524,10 @@ static bool Subtype_AddCode(const Core::CPUThreadGuard& guard, const ARAddr& add
     LogInfo("--------");
 
     const u32 read = PowerPC::MMU::HostRead_U32(guard, new_addr);
-    const float read_float = Common::BitCast<float>(read);
+    const float read_float = std::bit_cast<float>(read);
     // data contains an (unsigned?) integer value
     const float fread = read_float + static_cast<float>(data);
-    const u32 newval = Common::BitCast<u32>(fread);
+    const u32 newval = std::bit_cast<u32>(fread);
     PowerPC::MMU::HostWrite_U32(guard, newval, new_addr);
     LogInfo("Old Value {:08x}", read);
     LogInfo("Increment {:08x}", data);
@@ -990,20 +995,18 @@ static bool RunCodeLocked(const Core::CPUThreadGuard& guard, const ARCode& arcod
 
 void RunAllActive(const Core::CPUThreadGuard& cpu_guard)
 {
-  if (!Config::Get(Config::MAIN_ENABLE_CHEATS))
+  if (!Config::AreCheatsEnabled())
     return;
 
   // If the mutex is idle then acquiring it should be cheap, fast mutexes
   // are only atomic ops unless contested. It should be rare for this to
   // be contested.
   std::lock_guard guard(s_lock);
-  s_active_codes.erase(std::remove_if(s_active_codes.begin(), s_active_codes.end(),
-                                      [&cpu_guard](const ARCode& code) {
-                                        bool success = RunCodeLocked(cpu_guard, code);
-                                        LogInfo("\n");
-                                        return !success;
-                                      }),
-                       s_active_codes.end());
+  std::erase_if(s_active_codes, [&cpu_guard](const ARCode& code) {
+    const bool success = RunCodeLocked(cpu_guard, code);
+    LogInfo("\n");
+    return !success;
+  });
   s_disable_logging = true;
 }
 

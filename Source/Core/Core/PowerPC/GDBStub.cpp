@@ -164,9 +164,8 @@ static void RemoveBreakpoint(BreakpointType type, u32 addr, u32 len)
   if (type == BreakpointType::ExecuteHard || type == BreakpointType::ExecuteSoft)
   {
     auto& breakpoints = Core::System::GetInstance().GetPowerPC().GetBreakPoints();
-    while (breakpoints.IsAddressBreakPoint(addr))
+    if (breakpoints.Remove(addr))
     {
-      breakpoints.Remove(addr);
       INFO_LOG_FMT(GDB_STUB, "gdb: removed a breakpoint: {:08x} bytes at {:08x}", len, addr);
     }
   }
@@ -179,6 +178,7 @@ static void RemoveBreakpoint(BreakpointType type, u32 addr, u32 len)
       INFO_LOG_FMT(GDB_STUB, "gdb: removed a memcheck: {:08x} bytes at {:08x}", len, addr);
     }
   }
+  Host_PPCBreakpointsChanged();
 }
 
 static void Nack()
@@ -259,7 +259,7 @@ static void ReadCommand()
 
 static bool IsDataAvailable()
 {
-  struct timeval t;
+  timeval t;
   fd_set _fds, *fds = &_fds;
 
   FD_ZERO(fds);
@@ -661,6 +661,7 @@ static void WriteRegister()
       break;
     case 65:
       ppc_state.msr.Hex = re32hex(bufptr);
+      PowerPC::MSRUpdated(ppc_state);
       break;
     case 66:
       ppc_state.cr.Set(re32hex(bufptr));
@@ -760,6 +761,7 @@ static void WriteRegister()
       break;
     case 131:
       ppc_state.spr[SPR_MMCR0] = re32hex(bufptr);
+      PowerPC::MMCRUpdated(ppc_state);
       break;
     case 132:
       ppc_state.spr[SPR_PMC1] = re32hex(bufptr);
@@ -772,6 +774,7 @@ static void WriteRegister()
       break;
     case 135:
       ppc_state.spr[SPR_MMCR1] = re32hex(bufptr);
+      PowerPC::MMCRUpdated(ppc_state);
       break;
     case 136:
       ppc_state.spr[SPR_PMC3] = re32hex(bufptr);
@@ -828,7 +831,7 @@ static void ReadMemory(const Core::CPUThreadGuard& guard)
 
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
-  u8* data = memory.GetPointer(addr);
+  u8* data = memory.GetPointerForRange(addr, len);
   Mem2hex(reply, data, len);
   reply[len * 2] = '\0';
   SendReply((char*)reply);
@@ -855,7 +858,7 @@ static void WriteMemory(const Core::CPUThreadGuard& guard)
 
   auto& system = Core::System::GetInstance();
   auto& memory = system.GetMemory();
-  u8* dst = memory.GetPointer(addr);
+  u8* dst = memory.GetPointerForRange(addr, len);
   Hex2mem(dst, s_cmd_bfr + i + 1, len);
   SendReply("OK");
 }
@@ -863,7 +866,7 @@ static void WriteMemory(const Core::CPUThreadGuard& guard)
 static void Step()
 {
   auto& system = Core::System::GetInstance();
-  system.GetCPU().EnableStepping(true);
+  system.GetCPU().SetStepping(true);
   Core::CallOnStateChangedCallbacks(Core::State::Paused);
 }
 
@@ -894,6 +897,7 @@ static bool AddBreakpoint(BreakpointType type, u32 addr, u32 len)
     INFO_LOG_FMT(GDB_STUB, "gdb: added {} memcheck: {:08x} bytes at {:08x}", static_cast<int>(type),
                  len, addr);
   }
+  Host_PPCBreakpointsChanged();
   return true;
 }
 
@@ -1013,7 +1017,8 @@ void ProcessCommands(bool loop_until_continue)
 
       WriteMemory(guard);
       auto& ppc_state = system.GetPPCState();
-      ppc_state.iCache.Reset();
+      auto& jit_interface = system.GetJitInterface();
+      ppc_state.iCache.Reset(jit_interface);
       Host_UpdateDisasmDialog();
       break;
     }

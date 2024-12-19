@@ -55,8 +55,8 @@ std::vector<std::string> GetProfilesFromSetting(const std::string& setting, cons
 
 std::vector<std::string> ProfileCycler::GetProfilesForDevice(InputConfig* device_configuration)
 {
-  const std::string device_profile_root_location(File::GetUserPath(D_CONFIG_IDX) + "Profiles/" +
-                                                 device_configuration->GetProfileName());
+  const std::string device_profile_root_location(
+      device_configuration->GetUserProfileDirectoryPath());
   return Common::DoFileSearch({device_profile_root_location}, {".ini"}, true);
 }
 
@@ -101,8 +101,8 @@ ProfileCycler::GetMatchingProfilesFromSetting(const std::string& setting,
                                               const std::vector<std::string>& profiles,
                                               InputConfig* device_configuration)
 {
-  const std::string device_profile_root_location(File::GetUserPath(D_CONFIG_IDX) + "Profiles/" +
-                                                 device_configuration->GetProfileName() + "/");
+  const std::string device_profile_root_location(
+      device_configuration->GetUserProfileDirectoryPath());
 
   const auto& profiles_from_setting = GetProfilesFromSetting(setting, device_profile_root_location);
   if (profiles_from_setting.empty())
@@ -111,8 +111,7 @@ ProfileCycler::GetMatchingProfilesFromSetting(const std::string& setting,
   }
 
   std::vector<std::string> result;
-  std::set_intersection(profiles.begin(), profiles.end(), profiles_from_setting.begin(),
-                        profiles_from_setting.end(), std::back_inserter(result));
+  std::ranges::set_intersection(profiles, profiles_from_setting, std::back_inserter(result));
   return result;
 }
 

@@ -143,7 +143,7 @@ void WatchWidget::UpdateButtonsEnabled()
   if (!isVisible())
     return;
 
-  const bool is_enabled = Core::IsRunning();
+  const bool is_enabled = Core::IsRunning(m_system);
   m_new->setEnabled(is_enabled);
   m_delete->setEnabled(is_enabled);
   m_clear->setEnabled(is_enabled);
@@ -158,7 +158,7 @@ void WatchWidget::Update()
 
   m_updating = true;
 
-  if (Core::GetState() != Core::State::Paused)
+  if (Core::GetState(m_system) != Core::State::Paused)
   {
     m_table->setDisabled(true);
     m_updating = false;
@@ -195,10 +195,11 @@ void WatchWidget::Update()
 
     QBrush brush = QPalette().brush(QPalette::Text);
 
-    if (!Core::IsRunning() || !PowerPC::MMU::HostIsRAMAddress(guard, entry.address))
+    const bool core_is_running = Core::IsRunning(m_system);
+    if (!core_is_running || !PowerPC::MMU::HostIsRAMAddress(guard, entry.address))
       brush.setColor(Qt::red);
 
-    if (Core::IsRunning())
+    if (core_is_running)
     {
       if (PowerPC::MMU::HostIsRAMAddress(guard, entry.address))
       {
@@ -327,6 +328,7 @@ void WatchWidget::OnSave()
 void WatchWidget::ShowContextMenu()
 {
   QMenu* menu = new QMenu(this);
+  menu->setAttribute(Qt::WA_DeleteOnClose, true);
 
   if (!m_table->selectedItems().empty())
   {
@@ -479,7 +481,7 @@ void WatchWidget::DeleteSelectedWatches()
     }
 
     // Sort greatest to smallest, so we don't stomp on existing indices
-    std::sort(row_indices.begin(), row_indices.end(), std::greater{});
+    std::ranges::sort(row_indices, std::ranges::greater{});
     for (const int row : row_indices)
     {
       DeleteWatch(guard, row);

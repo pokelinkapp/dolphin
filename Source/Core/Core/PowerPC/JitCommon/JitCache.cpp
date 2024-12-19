@@ -8,13 +8,16 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <ranges>
 #include <set>
+#include <span>
 #include <utility>
 
 #include "Common/CommonTypes.h"
 #include "Common/JitRegister.h"
 #include "Core/Config/MainSettings.h"
 #include "Core/Core.h"
+#include "Core/Host.h"
 #include "Core/PowerPC/JitCommon/JitBase.h"
 #include "Core/PowerPC/MMU.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
@@ -32,6 +35,18 @@ bool JitBlock::OverlapsPhysicalRange(u32 address, u32 length) const
          physical_addresses.lower_bound(address + length);
 }
 
+void JitBlock::ProfileData::BeginProfiling(ProfileData* data)
+{
+  data->run_count += 1;
+  data->time_start = Clock::now();
+}
+
+void JitBlock::ProfileData::EndProfiling(ProfileData* data, u32 downcount_amount)
+{
+  data->cycles_spent += downcount_amount;
+  data->time_spent += Clock::now() - data->time_start;
+}
+
 JitBaseBlockCache::JitBaseBlockCache(JitBase& jit) : m_jit{jit}
 {
 }
@@ -42,10 +57,10 @@ void JitBaseBlockCache::Init()
 {
   Common::JitRegister::Init(Config::Get(Config::MAIN_PERF_MAP_DIR));
 
-#ifdef _ARCH_64
-  m_entry_points_ptr = reinterpret_cast<u8**>(m_entry_points_arena.Create(FAST_BLOCK_MAP_SIZE));
-#else
   m_entry_points_ptr = nullptr;
+#ifdef _ARCH_64
+  if (Config::Get(Config::MAIN_LARGE_ENTRY_POINTS_MAP))
+    m_entry_points_ptr = reinterpret_cast<u8**>(m_entry_points_arena.Create(FAST_BLOCK_MAP_SIZE));
 #endif
 
   Clear();
@@ -98,41 +113,68 @@ JitBlock** JitBaseBlockCache::GetFastBlockMapFallback()
   return m_fast_block_map_fallback.data();
 }
 
-void JitBaseBlockCache::RunOnBlocks(std::function<void(const JitBlock&)> f)
+void JitBaseBlockCache::RunOnBlocks(const Core::CPUThreadGuard&,
+                                    std::function<void(const JitBlock&)> f) const
 {
   for (const auto& e : block_map)
     f(e.second);
 }
 
+void JitBaseBlockCache::WipeBlockProfilingData(const Core::CPUThreadGuard&)
+{
+  for (const auto& kv : block_map)
+  {
+    if (JitBlock::ProfileData* const profile_data = kv.second.profile_data.get())
+      *profile_data = {};
+  }
+  Host_JitProfileDataWiped();
+}
+
 JitBlock* JitBaseBlockCache::AllocateBlock(u32 em_address)
 {
   const u32 physical_address = m_jit.m_mmu.JitCache_TranslateAddress(em_address).address;
-  JitBlock& b = block_map.emplace(physical_address, JitBlock())->second;
+  JitBlock& b = block_map.emplace(physical_address, m_jit.IsProfilingEnabled())->second;
   b.effectiveAddress = em_address;
   b.physicalAddress = physical_address;
-  b.msrBits = m_jit.m_ppc_state.msr.Hex & JIT_CACHE_MSR_MASK;
+  b.feature_flags = m_jit.m_ppc_state.feature_flags;
   b.linkData.clear();
   b.fast_block_map_index = 0;
   return &b;
 }
 
 void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
-                                      const std::set<u32>& physical_addresses)
+                                      const PPCAnalyst::CodeBlock& code_block,
+                                      const PPCAnalyst::CodeBuffer& code_buffer)
 {
-  size_t index = FastLookupIndexForAddress(block.effectiveAddress, block.msrBits);
+  size_t index = FastLookupIndexForAddress(block.effectiveAddress, block.feature_flags);
   if (m_entry_points_ptr)
+  {
+    m_entry_points_arena.EnsureMemoryPageWritable(index * sizeof(u8*));
     m_entry_points_ptr[index] = block.normalEntry;
+  }
   else
+  {
     m_fast_block_map_fallback[index] = &block;
+  }
   block.fast_block_map_index = index;
 
-  block.physical_addresses = physical_addresses;
+  block.physical_addresses = code_block.m_physical_addresses;
 
-  u32 range_mask = ~(BLOCK_RANGE_MAP_ELEMENTS - 1);
-  for (u32 addr : physical_addresses)
+  block.originalSize = code_block.m_num_instructions;
+  if (m_jit.IsDebuggingEnabled())
+  {
+    // TODO C++23: Can do this all in one statement with `std::vector::assign_range`.
+    const std::ranges::transform_view original_buffer_transform_view{
+        std::span{code_buffer.data(), block.originalSize},
+        [](const PPCAnalyst::CodeOp& op) { return std::make_pair(op.address, op.inst); }};
+    block.original_buffer.assign(original_buffer_transform_view.begin(),
+                                 original_buffer_transform_view.end());
+  }
+
+  for (u32 addr : block.physical_addresses)
   {
     valid_block.Set(addr / 32);
-    block_range_map[addr & range_mask].insert(&block);
+    block_range_map[addr & BLOCK_RANGE_MAP_MASK].insert(&block);
   }
 
   if (block_link)
@@ -147,22 +189,23 @@ void JitBaseBlockCache::FinalizeBlock(JitBlock& block, bool block_link,
 
   Common::Symbol* symbol = nullptr;
   if (Common::JitRegister::IsEnabled() &&
-      (symbol = g_symbolDB.GetSymbolFromAddr(block.effectiveAddress)) != nullptr)
+      (symbol = m_jit.m_ppc_symbol_db.GetSymbolFromAddr(block.effectiveAddress)) != nullptr)
   {
-    Common::JitRegister::Register(block.normalEntry, block.codeSize, "JIT_PPC_{}_{:08x}",
-                                  symbol->function_name.c_str(), block.physicalAddress);
+    Common::JitRegister::Register(block.normalEntry, block.near_end - block.normalEntry,
+                                  "JIT_PPC_{}_{:08x}", symbol->function_name,
+                                  block.physicalAddress);
   }
   else
   {
-    Common::JitRegister::Register(block.normalEntry, block.codeSize, "JIT_PPC_{:08x}",
-                                  block.physicalAddress);
+    Common::JitRegister::Register(block.normalEntry, block.near_end - block.normalEntry,
+                                  "JIT_PPC_{:08x}", block.physicalAddress);
   }
 }
 
-JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, u32 msr)
+JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, CPUEmuFeatureFlags feature_flags)
 {
   u32 translated_addr = addr;
-  if (UReg_MSR(msr).IR)
+  if (feature_flags & FEATURE_FLAG_MSR_IR)
   {
     auto translated = m_jit.m_mmu.JitCache_TranslateAddress(addr);
     if (!translated.valid)
@@ -176,7 +219,7 @@ JitBlock* JitBaseBlockCache::GetBlockFromStartAddress(u32 addr, u32 msr)
   for (; iter.first != iter.second; iter.first++)
   {
     JitBlock& b = iter.first->second;
-    if (b.effectiveAddress == addr && b.msrBits == (msr & JIT_CACHE_MSR_MASK))
+    if (b.effectiveAddress == addr && b.feature_flags == feature_flags)
       return &b;
   }
 
@@ -189,15 +232,14 @@ const u8* JitBaseBlockCache::Dispatch()
   if (m_entry_points_ptr)
   {
     u8* entry_point =
-        m_entry_points_ptr[FastLookupIndexForAddress(ppc_state.pc, ppc_state.msr.Hex)];
+        m_entry_points_ptr[FastLookupIndexForAddress(ppc_state.pc, ppc_state.feature_flags)];
     if (entry_point)
     {
       return entry_point;
     }
     else
     {
-      JitBlock* block =
-          MoveBlockIntoFastCache(ppc_state.pc, ppc_state.msr.Hex & JIT_CACHE_MSR_MASK);
+      JitBlock* block = MoveBlockIntoFastCache(ppc_state.pc, ppc_state.feature_flags);
 
       if (!block)
         return nullptr;
@@ -207,12 +249,12 @@ const u8* JitBaseBlockCache::Dispatch()
   }
 
   JitBlock* block =
-      m_fast_block_map_fallback[FastLookupIndexForAddress(ppc_state.pc, ppc_state.msr.Hex)];
+      m_fast_block_map_fallback[FastLookupIndexForAddress(ppc_state.pc, ppc_state.feature_flags)];
 
   if (!block || block->effectiveAddress != ppc_state.pc ||
-      block->msrBits != (ppc_state.msr.Hex & JIT_CACHE_MSR_MASK))
+      block->feature_flags != ppc_state.feature_flags)
   {
-    block = MoveBlockIntoFastCache(ppc_state.pc, ppc_state.msr.Hex & JIT_CACHE_MSR_MASK);
+    block = MoveBlockIntoFastCache(ppc_state.pc, ppc_state.feature_flags);
   }
 
   if (!block)
@@ -307,8 +349,7 @@ void JitBaseBlockCache::InvalidateICacheInternal(u32 physical_address, u32 addre
 void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
 {
   // Iterate over all macro blocks which overlap the given range.
-  u32 range_mask = ~(BLOCK_RANGE_MAP_ELEMENTS - 1);
-  auto start = block_range_map.lower_bound(address & range_mask);
+  auto start = block_range_map.lower_bound(address & BLOCK_RANGE_MAP_MASK);
   auto end = block_range_map.lower_bound(address + length);
   while (start != end)
   {
@@ -322,8 +363,8 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
         // If the block overlaps, also remove all other occupied slots in the other macro blocks.
         // This will leak empty macro blocks, but they may be reused or cleared later on.
         for (u32 addr : block->physical_addresses)
-          if ((addr & range_mask) != start->first)
-            block_range_map[addr & range_mask].erase(block);
+          if ((addr & BLOCK_RANGE_MAP_MASK) != start->first)
+            block_range_map[addr & BLOCK_RANGE_MAP_MASK].erase(block);
 
         // And remove the block.
         DestroyBlock(*block);
@@ -353,6 +394,23 @@ void JitBaseBlockCache::ErasePhysicalRange(u32 address, u32 length)
   }
 }
 
+void JitBaseBlockCache::EraseSingleBlock(const JitBlock& block)
+{
+  const auto equal_range = block_map.equal_range(block.physicalAddress);
+  const auto block_map_iter = std::ranges::find(equal_range.first, equal_range.second, &block,
+                                                [](const auto& kv) { return &kv.second; });
+  if (block_map_iter == equal_range.second) [[unlikely]]
+    return;
+
+  JitBlock& mutable_block = block_map_iter->second;
+
+  for (const u32 addr : mutable_block.physical_addresses)
+    block_range_map[addr & BLOCK_RANGE_MAP_MASK].erase(&mutable_block);
+
+  DestroyBlock(mutable_block);
+  block_map.erase(block_map_iter);  // The original JitBlock reference is now dangling.
+}
+
 u32* JitBaseBlockCache::GetBlockBitSet() const
 {
   return valid_block.m_valid_block.get();
@@ -374,7 +432,7 @@ void JitBaseBlockCache::LinkBlockExits(JitBlock& block)
   {
     if (!e.linkStatus)
     {
-      JitBlock* destinationBlock = GetBlockFromStartAddress(e.exitAddress, block.msrBits);
+      JitBlock* destinationBlock = GetBlockFromStartAddress(e.exitAddress, block.feature_flags);
       if (destinationBlock)
       {
         WriteLinkBlock(e, destinationBlock);
@@ -393,7 +451,7 @@ void JitBaseBlockCache::LinkBlock(JitBlock& block)
 
   for (JitBlock* b2 : it->second)
   {
-    if (block.msrBits == b2->msrBits)
+    if (block.feature_flags == b2->feature_flags)
       LinkBlockExits(*b2);
   }
 }
@@ -412,7 +470,7 @@ void JitBaseBlockCache::UnlinkBlock(const JitBlock& block)
     return;
   for (JitBlock* sourceBlock : it->second)
   {
-    if (sourceBlock->msrBits != block.msrBits)
+    if (sourceBlock->feature_flags != block.feature_flags)
       continue;
 
     for (auto& e : sourceBlock->linkData)
@@ -460,9 +518,9 @@ void JitBaseBlockCache::DestroyBlock(JitBlock& block)
   WriteDestroyBlock(block);
 }
 
-JitBlock* JitBaseBlockCache::MoveBlockIntoFastCache(u32 addr, u32 msr)
+JitBlock* JitBaseBlockCache::MoveBlockIntoFastCache(u32 addr, CPUEmuFeatureFlags feature_flags)
 {
-  JitBlock* block = GetBlockFromStartAddress(addr, msr);
+  JitBlock* block = GetBlockFromStartAddress(addr, feature_flags);
 
   if (!block)
     return nullptr;
@@ -484,21 +542,26 @@ JitBlock* JitBaseBlockCache::MoveBlockIntoFastCache(u32 addr, u32 msr)
   }
 
   // And create a new one
-  size_t index = FastLookupIndexForAddress(addr, msr);
+  size_t index = FastLookupIndexForAddress(addr, feature_flags);
   if (m_entry_points_ptr)
+  {
+    m_entry_points_arena.EnsureMemoryPageWritable(index * sizeof(u8*));
     m_entry_points_ptr[index] = block->normalEntry;
+  }
   else
+  {
     m_fast_block_map_fallback[index] = block;
+  }
   block->fast_block_map_index = index;
 
   return block;
 }
 
-size_t JitBaseBlockCache::FastLookupIndexForAddress(u32 address, u32 msr)
+size_t JitBaseBlockCache::FastLookupIndexForAddress(u32 address, u32 feature_flags)
 {
   if (m_entry_points_ptr)
   {
-    return ((msr & JIT_CACHE_MSR_MASK) << 26) | (address >> 2);
+    return (static_cast<size_t>(feature_flags) << 30) | (address >> 2);
   }
   else
   {

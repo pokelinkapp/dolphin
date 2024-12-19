@@ -4,6 +4,7 @@
 #include "Common/Network.h"
 
 #include <algorithm>
+#include <bit>
 #include <string_view>
 #include <vector>
 
@@ -35,10 +36,10 @@ MACAddress GenerateMacAddress(const MACConsumer type)
   switch (type)
   {
   case MACConsumer::BBA:
-    std::copy(oui_bba.begin(), oui_bba.end(), mac.begin());
+    std::ranges::copy(oui_bba, mac.begin());
     break;
   case MACConsumer::IOS:
-    std::copy(oui_ios.begin(), oui_ios.end(), mac.begin());
+    std::ranges::copy(oui_ios, mac.begin());
     break;
   }
 
@@ -307,8 +308,8 @@ u16 ComputeNetworkChecksum(const void* data, u16 length, u32 initial_value)
 u16 ComputeTCPNetworkChecksum(const IPAddress& from, const IPAddress& to, const void* data,
                               u16 length, u8 protocol)
 {
-  const u32 source_addr = ntohl(Common::BitCast<u32>(from));
-  const u32 destination_addr = ntohl(Common::BitCast<u32>(to));
+  const u32 source_addr = ntohl(std::bit_cast<u32>(from));
+  const u32 destination_addr = ntohl(std::bit_cast<u32>(to));
   const u32 initial_value = (source_addr >> 16) + (source_addr & 0xFFFF) +
                             (destination_addr >> 16) + (destination_addr & 0xFFFF) + protocol +
                             length;

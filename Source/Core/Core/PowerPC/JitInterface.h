@@ -3,9 +3,14 @@
 
 #pragma once
 
+#include <cstddef>
+#include <cstdio>
+#include <functional>
+#include <iosfwd>
 #include <memory>
-#include <string>
-#include <variant>
+#include <string_view>
+#include <utility>
+#include <vector>
 
 #include "Common/CommonTypes.h"
 #include "Core/MachineContext.h"
@@ -13,19 +18,16 @@
 class CPUCoreBase;
 class PointerWrap;
 class JitBase;
+struct JitBlock;
 
 namespace Core
 {
+class CPUThreadGuard;
 class System;
-}
+}  // namespace Core
 namespace PowerPC
 {
 enum class CPUCore;
-}
-
-namespace Profiler
-{
-struct ProfileStats;
 }
 
 class JitInterface
@@ -43,41 +45,36 @@ public:
   CPUCoreBase* InitJitCore(PowerPC::CPUCore core);
   CPUCoreBase* GetCore() const;
 
-  // Debugging
-  enum class ProfilingState
-  {
-    Enabled,
-    Disabled
-  };
-  enum class GetHostCodeError
-  {
-    NoJitActive,
-    NoTranslation,
-  };
-  struct GetHostCodeResult
-  {
-    const u8* code;
-    u32 code_size;
-    u32 entry_address;
-  };
-
   void UpdateMembase();
-  void SetProfilingState(ProfilingState state);
-  void WriteProfileResults(const std::string& filename) const;
-  void GetProfileResults(Profiler::ProfileStats* prof_stats) const;
-  std::variant<GetHostCodeError, GetHostCodeResult> GetHostCode(u32 address) const;
+  void JitBlockLogDump(const Core::CPUThreadGuard& guard, std::FILE* file) const;
+  void WipeBlockProfilingData(const Core::CPUThreadGuard& guard);
+  void RunOnBlocks(const Core::CPUThreadGuard& guard, std::function<void(const JitBlock&)> f) const;
+  std::size_t GetBlockCount() const;
 
   // Memory Utilities
   bool HandleFault(uintptr_t access_address, SContext* ctx);
   bool HandleStackFault();
 
   // Clearing CodeCache
-  void ClearCache();
+  void ClearCache(const Core::CPUThreadGuard& guard);
 
   // This clear is "safe" in the sense that it's okay to run from
   // inside a JIT'ed block: it clears the instruction cache, but not
   // the JIT'ed code.
   void ClearSafe();
+
+  // DolphinQt's JITWidget needs EraseSingleBlock. Nothing else (from outside of the Core) should
+  // use it, or else JitBlockTableModel will contain a dangling reference. If something else from
+  // outside of the Core *must* use this, consider reworking the logic in JITWidget.
+  void EraseSingleBlock(const JitBlock& block);
+
+  // Memory region name, free size, and fragmentation ratio
+  using MemoryStats = std::pair<std::string_view, std::pair<std::size_t, double>>;
+  std::vector<MemoryStats> GetMemoryStats() const;
+
+  // Disassemble the recompiled code from a JIT block. Returns the disassembled instruction count.
+  std::size_t DisassembleNearCode(const JitBlock& block, std::ostream& stream) const;
+  std::size_t DisassembleFarCode(const JitBlock& block, std::ostream& stream) const;
 
   // If "forced" is true, a recompile is being requested on code that hasn't been modified.
   void InvalidateICache(u32 address, u32 size, bool forced);

@@ -26,11 +26,7 @@
 #include "Core/PowerPC/SignatureDB/SignatureDB.h"
 #include "Core/System.h"
 
-PPCSymbolDB g_symbolDB;
-
-PPCSymbolDB::PPCSymbolDB() : debugger{&Core::System::GetInstance().GetPowerPC().GetDebugInterface()}
-{
-}
+PPCSymbolDB::PPCSymbolDB() = default;
 
 PPCSymbolDB::~PPCSymbolDB() = default;
 
@@ -38,7 +34,7 @@ PPCSymbolDB::~PPCSymbolDB() = default;
 Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard, u32 start_addr)
 {
   // It's already in the list
-  if (m_functions.find(start_addr) != m_functions.end())
+  if (m_functions.contains(start_addr))
     return nullptr;
 
   Common::Symbol symbol;
@@ -53,7 +49,8 @@ Common::Symbol* PPCSymbolDB::AddFunction(const Core::CPUThreadGuard& guard, u32 
 }
 
 void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAddr, u32 size,
-                                 const std::string& name, Common::Symbol::Type type)
+                                 const std::string& name, const std::string& object_name,
+                                 Common::Symbol::Type type)
 {
   auto iter = m_functions.find(startAddr);
   if (iter != m_functions.end())
@@ -61,6 +58,7 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
     // already got it, let's just update name, checksum & size to be sure.
     Common::Symbol* tempfunc = &iter->second;
     tempfunc->Rename(name);
+    tempfunc->object_name = object_name;
     tempfunc->hash = HashSignatureDB::ComputeCodeChecksum(guard, startAddr, startAddr + size - 4);
     tempfunc->type = type;
     tempfunc->size = size;
@@ -69,6 +67,7 @@ void PPCSymbolDB::AddKnownSymbol(const Core::CPUThreadGuard& guard, u32 startAdd
   {
     // new symbol. run analyze.
     auto& new_symbol = m_functions.emplace(startAddr, name).first->second;
+    new_symbol.object_name = object_name;
     new_symbol.type = type;
     new_symbol.address = startAddr;
 
@@ -112,13 +111,11 @@ Common::Symbol* PPCSymbolDB::GetSymbolFromAddr(u32 addr)
   return nullptr;
 }
 
-std::string PPCSymbolDB::GetDescription(u32 addr)
+std::string_view PPCSymbolDB::GetDescription(u32 addr)
 {
-  Common::Symbol* symbol = GetSymbolFromAddr(addr);
-  if (symbol)
+  if (const Common::Symbol* const symbol = GetSymbolFromAddr(addr))
     return symbol->name;
-  else
-    return " --- ";
+  return " --- ";
 }
 
 void PPCSymbolDB::FillInCallers()
@@ -405,31 +402,50 @@ bool PPCSymbolDB::LoadMap(const Core::CPUThreadGuard& guard, const std::string& 
     if (name[strlen(name) - 1] == '\r')
       name[strlen(name) - 1] = 0;
 
+    // Split the current name string into separate parts, and get the object name
+    // if it exists.
+    const std::vector<std::string> parts = SplitString(name, '\t');
+    const std::string name_string(StripWhitespace(parts[0]));
+    const std::string object_filename_string =
+        parts.size() > 1 ? std::string(StripWhitespace(parts[1])) : "";
+
     // Check if this is a valid entry.
     if (strlen(name) > 0)
     {
-      // Can't compute the checksum if not in RAM
-      bool good = !bad && PowerPC::MMU::HostIsInstructionRAMAddress(guard, vaddress) &&
-                  PowerPC::MMU::HostIsInstructionRAMAddress(guard, vaddress + size - 4);
-      if (!good)
+      bool good;
+      const Common::Symbol::Type type = section_name == ".text" || section_name == ".init" ?
+                                            Common::Symbol::Type::Function :
+                                            Common::Symbol::Type::Data;
+
+      if (type == Common::Symbol::Type::Function)
       {
-        // check for BLR before function
-        PowerPC::TryReadInstResult read_result =
-            guard.GetSystem().GetMMU().TryReadInstruction(vaddress - 4);
-        if (read_result.valid && read_result.hex == 0x4e800020)
+        // Can't compute the checksum if not in RAM
+        good = !bad && PowerPC::MMU::HostIsInstructionRAMAddress(guard, vaddress) &&
+               PowerPC::MMU::HostIsInstructionRAMAddress(guard, vaddress + size - 4);
+        if (!good)
         {
-          // check for BLR at end of function
-          read_result = guard.GetSystem().GetMMU().TryReadInstruction(vaddress + size - 4);
-          good = read_result.valid && read_result.hex == 0x4e800020;
+          // check for BLR before function
+          PowerPC::TryReadInstResult read_result =
+              guard.GetSystem().GetMMU().TryReadInstruction(vaddress - 4);
+          if (read_result.valid && read_result.hex == 0x4e800020)
+          {
+            // check for BLR at end of function
+            read_result = guard.GetSystem().GetMMU().TryReadInstruction(vaddress + size - 4);
+            good = read_result.valid && read_result.hex == 0x4e800020;
+          }
         }
       }
+      else
+      {
+        // Data type, can have any length.
+        good = !bad && PowerPC::MMU::HostIsRAMAddress(guard, vaddress) &&
+               PowerPC::MMU::HostIsRAMAddress(guard, vaddress + size - 1);
+      }
+
       if (good)
       {
         ++good_count;
-        const Common::Symbol::Type type = section_name == ".text" || section_name == ".init" ?
-                                              Common::Symbol::Type::Function :
-                                              Common::Symbol::Type::Data;
-        AddKnownSymbol(guard, vaddress, size, name, type);
+        AddKnownSymbol(guard, vaddress, size, name_string, object_filename_string, type);
       }
       else
       {
@@ -467,8 +483,13 @@ bool PPCSymbolDB::SaveSymbolMap(const std::string& filename) const
   for (const auto& symbol : function_symbols)
   {
     // Write symbol address, size, virtual address, alignment, name
-    f.WriteString(fmt::format("{0:08x} {1:08x} {2:08x} {3} {4}\n", symbol->address, symbol->size,
-                              symbol->address, 0, symbol->name));
+    std::string line = fmt::format("{0:08x} {1:06x} {2:08x} {3} {4}", symbol->address, symbol->size,
+                                   symbol->address, 0, symbol->name);
+    // Also write the object name if it exists
+    if (!symbol->object_name.empty())
+      line += fmt::format(" \t{0}", symbol->object_name);
+    line += "\n";
+    f.WriteString(line);
   }
 
   // Write .data section
@@ -476,8 +497,13 @@ bool PPCSymbolDB::SaveSymbolMap(const std::string& filename) const
   for (const auto& symbol : data_symbols)
   {
     // Write symbol address, size, virtual address, alignment, name
-    f.WriteString(fmt::format("{0:08x} {1:08x} {2:08x} {3} {4}\n", symbol->address, symbol->size,
-                              symbol->address, 0, symbol->name));
+    std::string line = fmt::format("{0:08x} {1:06x} {2:08x} {3} {4}", symbol->address, symbol->size,
+                                   symbol->address, 0, symbol->name);
+    // Also write the object name if it exists
+    if (!symbol->object_name.empty())
+      line += fmt::format(" \t{0}", symbol->object_name);
+    line += "\n";
+    f.WriteString(line);
   }
 
   return true;
@@ -497,6 +523,8 @@ bool PPCSymbolDB::SaveCodeMap(const Core::CPUThreadGuard& guard, const std::stri
 
   // Write ".text" at the top
   f.WriteString(".text\n");
+
+  const auto& ppc_debug_interface = guard.GetSystem().GetPowerPC().GetDebugInterface();
 
   u32 next_address = 0;
   for (const auto& function : m_functions)
@@ -518,7 +546,7 @@ bool PPCSymbolDB::SaveCodeMap(const Core::CPUThreadGuard& guard, const std::stri
     // Write the code
     for (u32 address = symbol.address; address < next_address; address += 4)
     {
-      const std::string disasm = debugger->Disassemble(&guard, address);
+      const std::string disasm = ppc_debug_interface.Disassemble(&guard, address);
       f.WriteString(fmt::format("{0:08x} {1:<{2}.{3}} {4}\n", address, symbol.name,
                                 SYMBOL_NAME_LIMIT, SYMBOL_NAME_LIMIT, disasm));
     }

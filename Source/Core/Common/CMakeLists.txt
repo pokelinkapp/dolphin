@@ -1,6 +1,18 @@
 add_library(common
   Analytics.cpp
   Analytics.h
+  Assembler/AssemblerShared.cpp
+  Assembler/AssemblerShared.h
+  Assembler/AssemblerTables.cpp
+  Assembler/AssemblerTables.h
+  Assembler/GekkoAssembler.cpp
+  Assembler/GekkoAssembler.h
+  Assembler/GekkoIRGen.cpp
+  Assembler/GekkoIRGen.h
+  Assembler/GekkoLexer.cpp
+  Assembler/GekkoLexer.h
+  Assembler/GekkoParser.cpp
+  Assembler/GekkoParser.h
   Assert.h
   BitField.h
   BitSet.h
@@ -63,6 +75,8 @@ add_library(common
   Hash.cpp
   Hash.h
   HookableEvent.h
+  HostDisassembler.cpp
+  HostDisassembler.h
   HttpRequest.cpp
   HttpRequest.h
   Image.cpp
@@ -74,6 +88,8 @@ add_library(common
   IOFile.h
   JitRegister.cpp
   JitRegister.h
+  JsonUtil.h
+  JsonUtil.cpp
   Lazy.h
   LinearDiskCache.h
   Logging/ConsoleListener.h
@@ -95,8 +111,6 @@ add_library(common
   Network.h
   PcapFile.cpp
   PcapFile.h
-  PerformanceCounter.cpp
-  PerformanceCounter.h
   Profiler.cpp
   Profiler.h
   QoSSession.cpp
@@ -115,6 +129,7 @@ add_library(common
   SmallVector.h
   SocketContext.cpp
   SocketContext.h
+  SpanUtils.h
   SPSCQueue.h
   StringLiteral.h
   StringUtil.cpp
@@ -125,10 +140,13 @@ add_library(common
   Thread.h
   Timer.cpp
   Timer.h
+  TimeUtil.cpp
+  TimeUtil.h
   TraversalClient.cpp
   TraversalClient.h
   TraversalProto.h
   TypeUtils.h
+  Unreachable.h
   UPnP.cpp
   UPnP.h
   VariantUtil.h
@@ -163,6 +181,11 @@ PRIVATE
   spng::spng
   ${VTUNE_LIBRARIES}
 )
+
+if ((DEFINED CMAKE_ANDROID_ARCH_ABI AND CMAKE_ANDROID_ARCH_ABI MATCHES "x86|x86_64") OR
+    (NOT DEFINED CMAKE_ANDROID_ARCH_ABI AND _M_X86_64))
+  target_link_libraries(common PRIVATE bdisasm)
+endif()
 
 if (APPLE)
   target_link_libraries(common
@@ -220,7 +243,7 @@ if(_M_ARM_64)
     ArmFPURoundMode.cpp
   )
 else()
-  if(_M_X86) #X86
+  if(_M_X86_64) #X86
     target_sources(common PRIVATE
       x64ABI.cpp
       x64ABI.h
@@ -314,10 +337,32 @@ if(OPROFILE_FOUND)
   target_link_libraries(common PRIVATE OProfile::OProfile)
 endif()
 
+if(ENABLE_LLVM)
+  find_package(LLVM CONFIG)
+  if(LLVM_FOUND)
+    message(STATUS "LLVM found, enabling LLVM support in disassembler")
+    target_compile_definitions(common PRIVATE HAVE_LLVM)
+    # Minimal documentation about LLVM's CMake functions is available here:
+    # https://releases.llvm.org/16.0.0/docs/CMake.html#embedding-llvm-in-your-project
+    # https://groups.google.com/g/llvm-dev/c/YeEVe7HTasQ?pli=1
+    #
+    # However, you have to read the source code in any case.
+    # Look for LLVM-Config.cmake in your (Unix) system:
+    # $ find /usr -name LLVM-Config\\.cmake 2>/dev/null
+    llvm_expand_pseudo_components(LLVM_EXPAND_COMPONENTS
+      AllTargetsInfos AllTargetsDisassemblers AllTargetsCodeGens
+    )
+    llvm_config(common USE_SHARED
+      mcdisassembler target ${LLVM_EXPAND_COMPONENTS}
+    )
+    target_include_directories(common PRIVATE ${LLVM_INCLUDE_DIRS})
+  endif()
+endif()
+
 if(UNIX)
   # Posix networking code needs to be fixed for Windows
   add_executable(traversal_server TraversalServer.cpp)
-  target_link_libraries(traversal_server PRIVATE common)
+  target_link_libraries(traversal_server PRIVATE common fmt::fmt)
   if(SYSTEMD_FOUND)
     target_link_libraries(traversal_server PRIVATE ${SYSTEMD_LIBRARIES})
   endif()

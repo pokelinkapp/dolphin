@@ -4,8 +4,11 @@
 #include "VideoBackends/OGL/OGLConfig.h"
 
 #include <cstdio>
+#include <ranges>
 #include <string>
 #include <string_view>
+
+#include <fmt/ranges.h>
 
 #include "Common/Assert.h"
 #include "Common/GL/GLContext.h"
@@ -211,7 +214,8 @@ void InitDriverInfo()
   default:
     break;
   }
-  DriverDetails::Init(DriverDetails::API_OPENGL, vendor, driver, version, family);
+  DriverDetails::Init(DriverDetails::API_OPENGL, vendor, driver, version, family,
+                      std::string(srenderer));
 }
 
 bool PopulateConfig(GLContext* m_main_gl_context)
@@ -287,10 +291,6 @@ bool PopulateConfig(GLContext* m_main_gl_context)
   g_Config.backend_info.bSupportsPrimitiveRestart =
       !DriverDetails::HasBug(DriverDetails::BUG_PRIMITIVE_RESTART) &&
       ((GLExtensions::Version() >= 310) || GLExtensions::Supports("GL_NV_primitive_restart"));
-  g_Config.backend_info.bSupportsFragmentStoresAndAtomics =
-      GLExtensions::Supports("GL_ARB_shader_storage_buffer_object");
-  g_Config.backend_info.bSupportsVSLinePointExpand =
-      GLExtensions::Supports("GL_ARB_shader_storage_buffer_object");
   g_Config.backend_info.bSupportsGSInstancing = GLExtensions::Supports("GL_ARB_gpu_shader5");
   g_Config.backend_info.bSupportsSSAA = GLExtensions::Supports("GL_ARB_gpu_shader5") &&
                                         GLExtensions::Supports("GL_ARB_sample_shading");
@@ -350,6 +350,21 @@ bool PopulateConfig(GLContext* m_main_gl_context)
       GLExtensions::Supports("GL_ARB_derivative_control") || GLExtensions::Version() >= 450;
   g_Config.backend_info.bSupportsTextureQueryLevels =
       GLExtensions::Supports("GL_ARB_texture_query_levels") || GLExtensions::Version() >= 430;
+
+  if (GLExtensions::Supports("GL_ARB_shader_storage_buffer_object"))
+  {
+    GLint fs = 0;
+    GLint vs = 0;
+    glGetIntegerv(GL_MAX_FRAGMENT_SHADER_STORAGE_BLOCKS, &fs);
+    glGetIntegerv(GL_MAX_VERTEX_SHADER_STORAGE_BLOCKS, &vs);
+    g_Config.backend_info.bSupportsFragmentStoresAndAtomics = fs >= 1;
+    g_Config.backend_info.bSupportsVSLinePointExpand = vs >= 1;
+  }
+  else
+  {
+    g_Config.backend_info.bSupportsFragmentStoresAndAtomics = false;
+    g_Config.backend_info.bSupportsVSLinePointExpand = false;
+  }
 
   if (GLExtensions::Supports("GL_EXT_shader_framebuffer_fetch"))
   {
@@ -571,7 +586,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
           glGetInternalformativ(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, colorInternalFormat, GL_SAMPLES,
                                 num_color_sample_counts,
                                 reinterpret_cast<GLint*>(color_aa_modes.data()));
-          ASSERT_MSG(VIDEO, std::is_sorted(color_aa_modes.rbegin(), color_aa_modes.rend()),
+          ASSERT_MSG(VIDEO, std::ranges::is_sorted(color_aa_modes | std::views::reverse),
                      "GPU driver didn't return sorted color AA modes: [{}]",
                      fmt::join(color_aa_modes, ", "));
         }
@@ -600,7 +615,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
           glGetInternalformativ(GL_TEXTURE_2D_MULTISAMPLE_ARRAY, depthInternalFormat, GL_SAMPLES,
                                 num_depth_sample_counts,
                                 reinterpret_cast<GLint*>(depth_aa_modes.data()));
-          ASSERT_MSG(VIDEO, std::is_sorted(depth_aa_modes.rbegin(), depth_aa_modes.rend()),
+          ASSERT_MSG(VIDEO, std::ranges::is_sorted(depth_aa_modes | std::views::reverse),
                      "GPU driver didn't return sorted depth AA modes: [{}]",
                      fmt::join(depth_aa_modes, ", "));
         }
@@ -616,10 +631,10 @@ bool PopulateConfig(GLContext* m_main_gl_context)
       g_Config.backend_info.AAModes.clear();
       g_Config.backend_info.AAModes.reserve(std::min(color_aa_modes.size(), depth_aa_modes.size()));
       // We only want AA modes that are supported for both the color and depth textures. Probably
-      // the support is the same, though. rbegin/rend are used to swap the order ahead of time.
-      std::set_intersection(color_aa_modes.rbegin(), color_aa_modes.rend(), depth_aa_modes.rbegin(),
-                            depth_aa_modes.rend(),
-                            std::back_inserter(g_Config.backend_info.AAModes));
+      // the support is the same, though. views::reverse is used to swap the order ahead of time.
+      std::ranges::set_intersection(color_aa_modes | std::views::reverse,
+                                    depth_aa_modes | std::views::reverse,
+                                    std::back_inserter(g_Config.backend_info.AAModes));
     }
     else
     {
@@ -646,7 +661,7 @@ bool PopulateConfig(GLContext* m_main_gl_context)
       }
       g_Config.backend_info.AAModes.push_back(1);
       // The UI wants ascending order
-      std::reverse(g_Config.backend_info.AAModes.begin(), g_Config.backend_info.AAModes.end());
+      std::ranges::reverse(g_Config.backend_info.AAModes);
     }
   }
   else
@@ -728,21 +743,27 @@ bool PopulateConfig(GLContext* m_main_gl_context)
 
   INFO_LOG_FMT(VIDEO, "Video Info: {}, {}, {}", g_ogl_config.gl_vendor, g_ogl_config.gl_renderer,
                g_ogl_config.gl_version);
-  WARN_LOG_FMT(VIDEO, "Missing OGL Extensions: {}{}{}{}{}{}{}{}{}{}{}{}{}{}",
-               g_ActiveConfig.backend_info.bSupportsDualSourceBlend ? "" : "DualSourceBlend ",
-               g_ActiveConfig.backend_info.bSupportsPrimitiveRestart ? "" : "PrimitiveRestart ",
-               g_ActiveConfig.backend_info.bSupportsEarlyZ ? "" : "EarlyZ ",
-               g_ogl_config.bSupportsGLPinnedMemory ? "" : "PinnedMemory ",
-               supports_glsl_cache ? "" : "ShaderCache ",
-               g_ogl_config.bSupportsGLBaseVertex ? "" : "BaseVertex ",
-               g_ogl_config.bSupportsGLBufferStorage ? "" : "BufferStorage ",
-               g_ogl_config.bSupportsGLSync ? "" : "Sync ",
-               g_ogl_config.bSupportsMSAA ? "" : "MSAA ",
-               g_ActiveConfig.backend_info.bSupportsSSAA ? "" : "SSAA ",
-               g_ActiveConfig.backend_info.bSupportsGSInstancing ? "" : "GSInstancing ",
-               g_ActiveConfig.backend_info.bSupportsClipControl ? "" : "ClipControl ",
-               g_ogl_config.bSupportsCopySubImage ? "" : "CopyImageSubData ",
-               g_ActiveConfig.backend_info.bSupportsDepthClamp ? "" : "DepthClamp ");
+
+  const std::string missing_extensions = fmt::format(
+      "{}{}{}{}{}{}{}{}{}{}{}{}{}{}",
+      g_ActiveConfig.backend_info.bSupportsDualSourceBlend ? "" : "DualSourceBlend ",
+      g_ActiveConfig.backend_info.bSupportsPrimitiveRestart ? "" : "PrimitiveRestart ",
+      g_ActiveConfig.backend_info.bSupportsEarlyZ ? "" : "EarlyZ ",
+      g_ogl_config.bSupportsGLPinnedMemory ? "" : "PinnedMemory ",
+      supports_glsl_cache ? "" : "ShaderCache ",
+      g_ogl_config.bSupportsGLBaseVertex ? "" : "BaseVertex ",
+      g_ogl_config.bSupportsGLBufferStorage ? "" : "BufferStorage ",
+      g_ogl_config.bSupportsGLSync ? "" : "Sync ", g_ogl_config.bSupportsMSAA ? "" : "MSAA ",
+      g_ActiveConfig.backend_info.bSupportsSSAA ? "" : "SSAA ",
+      g_ActiveConfig.backend_info.bSupportsGSInstancing ? "" : "GSInstancing ",
+      g_ActiveConfig.backend_info.bSupportsClipControl ? "" : "ClipControl ",
+      g_ogl_config.bSupportsCopySubImage ? "" : "CopyImageSubData ",
+      g_ActiveConfig.backend_info.bSupportsDepthClamp ? "" : "DepthClamp ");
+
+  if (missing_extensions.empty())
+    INFO_LOG_FMT(VIDEO, "All used OGL Extensions are available.");
+  else
+    WARN_LOG_FMT(VIDEO, "Missing OGL Extensions: {}", missing_extensions);
 
   return true;
 }

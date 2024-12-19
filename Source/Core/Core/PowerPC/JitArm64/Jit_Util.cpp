@@ -78,10 +78,8 @@ private:
 
     m_emit->ABI_PushRegisters(m_gprs_in_use);
     float_emit.ABI_PushRegisters(m_fprs_in_use, ARM64Reg::X1);
-    m_emit->MOVP2R(ARM64Reg::X1, m_system);
-    m_emit->MOVI2R(ARM64Reg::W2, m_address);
-    m_emit->MOV(ARM64Reg::W3, m_src_reg);
-    m_emit->BLR(m_emit->ABI_SetupLambda(lambda));
+
+    m_emit->ABI_CallLambdaFunction(lambda, m_system, m_address, m_src_reg);
 
     float_emit.ABI_PopRegisters(m_fprs_in_use, ARM64Reg::X1);
     m_emit->ABI_PopRegisters(m_gprs_in_use);
@@ -176,9 +174,9 @@ private:
 
     m_emit->ABI_PushRegisters(m_gprs_in_use);
     float_emit.ABI_PushRegisters(m_fprs_in_use, ARM64Reg::X1);
-    m_emit->MOVP2R(ARM64Reg::X1, m_system);
-    m_emit->MOVI2R(ARM64Reg::W2, m_address);
-    m_emit->BLR(m_emit->ABI_SetupLambda(lambda));
+
+    m_emit->ABI_CallLambdaFunction(lambda, m_system, m_address);
+
     if (m_sign_extend)
       m_emit->SBFM(m_dst_reg, ARM64Reg::W0, 0, sbits - 1);
     else
@@ -259,6 +257,12 @@ void ByteswapAfterLoad(ARM64XEmitter* emit, ARM64FloatEmitter* float_emit, ARM64
 ARM64Reg ByteswapBeforeStore(ARM64XEmitter* emit, ARM64FloatEmitter* float_emit, ARM64Reg tmp_reg,
                              ARM64Reg src_reg, u32 flags, bool want_reversed)
 {
+  // Byteswapping zero is still zero.
+  // We'd typically expect a writable register to be passed in, but recognize
+  // WZR for optimization purposes.
+  if ((flags & BackPatchInfo::FLAG_FLOAT) == 0 && src_reg == ARM64Reg::WZR)
+    return ARM64Reg::WZR;
+
   ARM64Reg dst_reg = src_reg;
 
   if (want_reversed == !(flags & BackPatchInfo::FLAG_REVERSE))

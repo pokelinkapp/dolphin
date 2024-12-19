@@ -25,6 +25,7 @@
 #include "Core/HW/WiimoteEmu/MotionPlus.h"
 #include "Core/HW/WiimoteEmu/WiimoteEmu.h"
 #include "Core/HW/WiimoteReal/WiimoteReal.h"
+#include "Core/System.h"
 
 #include "DolphinQt/QtUtils/AspectRatioWidget.h"
 #include "DolphinQt/QtUtils/QueueOnObject.h"
@@ -50,32 +51,32 @@ WiiTASInputWindow::WiiTASInputWindow(QWidget* parent, int num) : TASInputWindow(
                                     ir_x_shortcut_key_sequence.toString(QKeySequence::NativeText),
                                     ir_y_shortcut_key_sequence.toString(QKeySequence::NativeText)));
 
-  const int ir_x_center = static_cast<int>(std::round(ir_max_x / 2.));
-  const int ir_y_center = static_cast<int>(std::round(ir_max_y / 2.));
+  const int ir_x_center = static_cast<int>(std::round(IRWidget::IR_MAX_X / 2.));
+  const int ir_y_center = static_cast<int>(std::round(IRWidget::IR_MAX_Y / 2.));
 
   auto* x_layout = new QHBoxLayout;
   m_ir_x_value = CreateSliderValuePair(
       WiimoteEmu::Wiimote::IR_GROUP, ControllerEmu::ReshapableInput::X_INPUT_OVERRIDE,
-      &m_wiimote_overrider, x_layout, ir_x_center, ir_x_center, ir_min_x, ir_max_x,
-      ir_x_shortcut_key_sequence, Qt::Horizontal, m_ir_box);
+      &m_wiimote_overrider, x_layout, ir_x_center, ir_x_center, IRWidget::IR_MIN_X,
+      IRWidget::IR_MAX_X, ir_x_shortcut_key_sequence, Qt::Horizontal, m_ir_box);
 
   auto* y_layout = new QVBoxLayout;
   m_ir_y_value = CreateSliderValuePair(
       WiimoteEmu::Wiimote::IR_GROUP, ControllerEmu::ReshapableInput::Y_INPUT_OVERRIDE,
-      &m_wiimote_overrider, y_layout, ir_y_center, ir_y_center, ir_min_y, ir_max_y,
-      ir_y_shortcut_key_sequence, Qt::Vertical, m_ir_box);
+      &m_wiimote_overrider, y_layout, ir_y_center, ir_y_center, IRWidget::IR_MIN_Y,
+      IRWidget::IR_MAX_Y, ir_y_shortcut_key_sequence, Qt::Vertical, m_ir_box);
   m_ir_y_value->setMaximumWidth(60);
 
   auto* visual = new IRWidget(this);
   visual->SetX(ir_x_center);
   visual->SetY(ir_y_center);
 
-  connect(m_ir_x_value, qOverload<int>(&QSpinBox::valueChanged), visual, &IRWidget::SetX);
-  connect(m_ir_y_value, qOverload<int>(&QSpinBox::valueChanged), visual, &IRWidget::SetY);
+  connect(m_ir_x_value, &QSpinBox::valueChanged, visual, &IRWidget::SetX);
+  connect(m_ir_y_value, &QSpinBox::valueChanged, visual, &IRWidget::SetY);
   connect(visual, &IRWidget::ChangedX, m_ir_x_value, &QSpinBox::setValue);
   connect(visual, &IRWidget::ChangedY, m_ir_y_value, &QSpinBox::setValue);
 
-  auto* visual_ar = new AspectRatioWidget(visual, ir_max_x, ir_max_y);
+  auto* visual_ar = new AspectRatioWidget(visual, IRWidget::IR_MAX_X, IRWidget::IR_MAX_Y);
 
   auto* visual_layout = new QHBoxLayout;
   visual_layout->addWidget(visual_ar);
@@ -347,7 +348,7 @@ WiiTASInputWindow::WiiTASInputWindow(QWidget* parent, int num) : TASInputWindow(
 
   setLayout(layout);
 
-  if (Core::IsRunning())
+  if (Core::IsRunning(Core::System::GetInstance()))
   {
     m_active_extension = GetWiimote()->GetActiveExtensionNumber();
     m_is_motion_plus_attached = GetWiimote()->IsMotionPlusAttached();

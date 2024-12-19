@@ -176,18 +176,20 @@ bool SwapChain::SelectSurfaceFormat()
     // because we already apply gamma ourselves, and we might not use sRGB gamma.
     // Force using a linear format instead, if this is the case.
     VkFormat format = VKTexture::GetLinearFormat(surface_format.format);
-    if (format == VK_FORMAT_R8G8B8A8_UNORM)
-      surface_format_RGBA8 = &surface_format;
-    else if (format == VK_FORMAT_B8G8R8A8_UNORM)
-      surface_format_BGRA8 = &surface_format;
-    else if (format == VK_FORMAT_A2B10G10R10_UNORM_PACK32 &&
-             surface_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-      surface_format_RGB10_A2 = &surface_format;
+    if (surface_format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+    {
+      if (format == VK_FORMAT_R8G8B8A8_UNORM)
+        surface_format_RGBA8 = &surface_format;
+      else if (format == VK_FORMAT_B8G8R8A8_UNORM)
+        surface_format_BGRA8 = &surface_format;
+      else if (format == VK_FORMAT_A2B10G10R10_UNORM_PACK32)
+        surface_format_RGB10_A2 = &surface_format;
+    }
     else if (format == VK_FORMAT_R16G16B16A16_SFLOAT &&
              surface_format.colorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT)
+    {
       surface_format_RGBA16F_scRGB = &surface_format;
-    else
-      continue;
+    }
   }
 
   const VkSurfaceFormatKHR* surface_format = nullptr;
@@ -428,8 +430,9 @@ bool SwapChain::SetupSwapChainImages()
                                 images.data());
   ASSERT(res == VK_SUCCESS);
 
-  const TextureConfig texture_config(TextureConfig(
-      m_width, m_height, 1, m_layers, 1, m_texture_format, AbstractTextureFlag_RenderTarget));
+  const TextureConfig texture_config(
+      TextureConfig(m_width, m_height, 1, m_layers, 1, m_texture_format,
+                    AbstractTextureFlag_RenderTarget, AbstractTextureType::Texture_2DArray));
   const VkRenderPass load_render_pass = g_object_cache->GetRenderPass(
       m_surface_format.format, VK_FORMAT_UNDEFINED, 1, VK_ATTACHMENT_LOAD_OP_LOAD);
   const VkRenderPass clear_render_pass = g_object_cache->GetRenderPass(
@@ -496,6 +499,9 @@ VkResult SwapChain::AcquireNextImage()
   VkResult res = vkAcquireNextImageKHR(g_vulkan_context->GetDevice(), m_swap_chain, UINT64_MAX,
                                        g_command_buffer_mgr->GetCurrentCommandBufferSemaphore(),
                                        VK_NULL_HANDLE, &m_current_swap_chain_image_index);
+  m_current_swap_chain_image_is_valid = res >= 0;
+  if (IsCurrentImageValid())
+    g_command_buffer_mgr->MarkCurrentCommandBufferSemaphoreUsed();
   if (res != VK_SUCCESS && res != VK_ERROR_OUT_OF_DATE_KHR && res != VK_SUBOPTIMAL_KHR)
     LOG_VULKAN_ERROR(res, "vkAcquireNextImageKHR failed: ");
 
