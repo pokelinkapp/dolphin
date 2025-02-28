@@ -25,8 +25,8 @@ struct FrameAdvance
 };
 struct FrameDrawn
 {
-  int width;
-  int height;
+  u32 width;
+  u32 height;
   const u8* data;
 };
 struct MemoryBreakpoint

@@ -17,6 +17,7 @@
 #include "Common/FileUtil.h"
 #include "Common/Logging/Log.h"
 
+#include <Core/API/Events.h>
 #include "Core/Config/MainSettings.h"
 #include "Core/ConfigManager.h"
 #include "Core/Core.h"
@@ -114,7 +115,21 @@ void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride
     e.swap_event.fbWidth = fb_width;
     e.swap_event.fbStride = fb_stride;
     e.swap_event.fbHeight = fb_height;
-    AsyncRequests::GetInstance()->PushEvent(e, false);
+    if (API::GetEventHub().HasListeners<API::Events::FrameDrawn>())
+   	{
+      AsyncRequests::GetInstance()->PushEvent(e, true);
+      auto frame = g_presenter->ReadDumpedFrame();
+      if (frame)
+      {
+        auto evt =
+            API::Events::FrameDrawn{std::get<1>(*frame), std::get<2>(*frame), std::get<0>(*frame)};
+        API::GetEventHub().EmitEvent(evt);
+      }
+  	}
+    else
+    {
+      AsyncRequests::GetInstance()->PushEvent(e, false);
+    }
   }
 }
 

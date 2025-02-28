@@ -267,7 +267,7 @@ static const std::tuple<u32> PyCodeBreakpoint(const API::Events::CodeBreakpoint&
 }
 static const std::tuple<u32, u32, PyObject*> PyFrameDrawn(const API::Events::FrameDrawn& evt)
 {
-  const u32 num_bytes = evt.width * evt.height * 4;
+  const u32 num_bytes = evt.width * evt.height * 3;
   auto data = reinterpret_cast<const char*>(evt.data);
   PyObject* pybytes = PyBytes_FromStringAndSize(data, num_bytes);
   return std::make_tuple(evt.width, evt.height, pybytes);

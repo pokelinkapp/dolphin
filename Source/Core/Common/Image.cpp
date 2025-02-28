@@ -120,7 +120,7 @@ bool SavePNG(const std::string& path, const u8* input, ImageByteFormat format, u
   return true;
 }
 
-static std::vector<u8> RGBAToRGB(const u8* input, u32 width, u32 height, u32 row_stride)
+std::vector<u8> RGBAToRGB(const u8* input, u32 width, u32 height, u32 row_stride)
 {
   std::vector<u8> buffer;
   buffer.reserve(width * height * 3);

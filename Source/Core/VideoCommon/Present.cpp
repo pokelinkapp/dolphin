@@ -223,6 +223,11 @@ void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_
   AfterPresentEvent::Trigger(present_info);
 }
 
+std::optional<std::tuple<u8*, u32, u32>> Presenter::ReadDumpedFrame()
+{
+  return g_frame_dumper->ReadDumpedFrame();
+}
+
 void Presenter::ProcessFrameDumping(u64 ticks) const
 {
   if (g_frame_dumper->IsFrameDumping() && m_xfb_entry)

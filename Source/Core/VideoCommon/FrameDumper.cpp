@@ -33,6 +33,25 @@ FrameDumper::FrameDumper()
 {
   m_frame_end_handle =
       AfterFrameEvent::Register([this](Core::System&) { FlushFrameDump(); }, "FrameDumper");
+  m_before_present_handle = BeforePresentEvent::Register(
+      [this](PresentInfo& present_info) { m_last_dumped_frame = std::nullopt; }, "FrameDumper");
+  m_after_present_handle = AfterPresentEvent::Register(
+      [this](PresentInfo& present_info) {
+        if (!API::GetEventHub().HasListeners<API::Events::FrameDrawn>())
+          return;
+        if (present_info.reason == PresentInfo::PresentReason::VideoInterfaceDuplicate)
+          return;
+        m_frame_dump_readback_texture->Flush();
+        m_frame_dump_readback_texture->Map();
+        const u8* dataRgba =
+            reinterpret_cast<u8*>(m_frame_dump_readback_texture->GetMappedPointer());
+        const u32 width = m_frame_dump_readback_texture->GetWidth();
+        const u32 height = m_frame_dump_readback_texture->GetHeight();
+        const int stride = static_cast<int>(m_frame_dump_readback_texture->GetMappedStride());
+        const std::vector<u8> data = Common::RGBAToRGB(dataRgba, width, height, stride);
+        m_last_dumped_frame = std::move(std::make_tuple(std::move(data), width, height));
+      },
+      "FrameDumper");
 }
 
 FrameDumper::~FrameDumper()
@@ -70,6 +89,15 @@ void FrameDumper::DumpCurrentFrame(const AbstractTexture* src_texture,
                                                  m_frame_dump_readback_texture->GetRect());
   m_last_frame_state = m_ffmpeg_dump.FetchState(ticks, frame_number);
   m_frame_dump_needs_flush = true;
+}
+
+std::optional<std::tuple<u8*, u32, u32>> FrameDumper::ReadDumpedFrame()
+{
+  if (!m_last_dumped_frame)
+    return std::nullopt;
+  return std::make_tuple(std::get<0>(*m_last_dumped_frame).data(),
+                         std::get<1>(*m_last_dumped_frame),
+                         std::get<2>(*m_last_dumped_frame));
 }
 
 bool FrameDumper::CheckFrameDumpRenderTexture(u32 target_width, u32 target_height)
@@ -225,13 +253,9 @@ void FrameDumper::FrameDumpThreadFunc()
 
     // Save screenshot
     const bool wants_screenshot = m_screenshot_request.TestAndClear();
-    const bool wants_frame_drawn_event = API::GetEventHub().HasListeners<API::Events::FrameDrawn>();
-    if (wants_screenshot || wants_frame_drawn_event)
+    if (wants_screenshot)
     {
       std::lock_guard<std::mutex> lk(m_screenshot_lock);
-      // TODO felk: Events must happen inside the CPU thread, but this is inside the FrameDumper thread.
-      // TODO felk: Maybe use the HookableEvent system instead? E.g. AfterFrameEvent. Might also be a good way to fix https://github.com/Felk/dolphin/issues/13
-      // API::GetEventHub().EmitEvent(API::Events::FrameDrawn{frame.width, frame.height, frame.data});
 
       if (wants_screenshot)
       {
