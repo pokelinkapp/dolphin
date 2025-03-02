@@ -116,16 +116,19 @@ void VideoBackendBase::Video_OutputXFB(u32 xfb_addr, u32 fb_width, u32 fb_stride
     e.swap_event.fbStride = fb_stride;
     e.swap_event.fbHeight = fb_height;
     if (API::GetEventHub().HasListeners<API::Events::FrameDrawn>())
-   	{
+    {
+      // thread safety: because we execute the swap event synchronously, we know the frame has been mapped to memory,
+      // and it won't be written to until the next swap.
       AsyncRequests::GetInstance()->PushEvent(e, true);
-      auto frame = g_presenter->ReadDumpedFrame();
-      if (frame)
+      std::optional<FrameData> maybeFrame = g_presenter->ReadDumpedFrame();
+      if (maybeFrame)
       {
-        auto evt =
-            API::Events::FrameDrawn{std::get<1>(*frame), std::get<2>(*frame), std::get<0>(*frame)};
+        FrameData frame = *maybeFrame;
+        auto evt = API::Events::FrameDrawn{(u32)frame.width, (u32)frame.height, (u32)frame.stride,
+                                           frame.data};
         API::GetEventHub().EmitEvent(evt);
       }
-  	}
+    }
     else
     {
       AsyncRequests::GetInstance()->PushEvent(e, false);

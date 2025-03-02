@@ -268,8 +268,19 @@ static const std::tuple<u32> PyCodeBreakpoint(const API::Events::CodeBreakpoint&
 static const std::tuple<u32, u32, PyObject*> PyFrameDrawn(const API::Events::FrameDrawn& evt)
 {
   const u32 num_bytes = evt.width * evt.height * 3;
-  auto data = reinterpret_cast<const char*>(evt.data);
-  PyObject* pybytes = PyBytes_FromStringAndSize(data, num_bytes);
+  PyObject* pybytes = PyBytes_FromStringAndSize(nullptr, num_bytes);
+  char* bytebuffer = PyBytes_AsString(pybytes);
+  for (u32 y = 0; y < evt.height; ++y)
+  {
+    const u8* srcrow = evt.data + y * evt.stride;
+    char* dstrow = bytebuffer + y * evt.width * 3;
+    for (u32 x = 0; x < evt.width; ++x)
+    {
+      dstrow[x * 3] = srcrow[x * 4];
+      dstrow[x * 3 + 1] = srcrow[x * 4 + 1];
+      dstrow[x * 3 + 2] = srcrow[x * 4 + 2];
+    }
+  }
   return std::make_tuple(evt.width, evt.height, pybytes);
 }
 // EVENT DEFINITIONS

@@ -31,7 +31,7 @@ public:
                         const MathUtil::Rectangle<int>& target_rect, u64 ticks, int frame_number);
 
   // Returns the frame data of the previously dumped frame. Assumes DumpCurrentFrame was called before this.
-  std::optional<std::tuple<u8*, u32, u32>> ReadDumpedFrame();
+  std::optional<FrameData> ReadDumpedFrame();
 
   void SaveScreenshot(std::string filename);
 
@@ -103,10 +103,9 @@ private:
   std::string m_screenshot_name;
 
   Common::EventHook m_before_present_handle;
-  Common::EventHook m_after_present_handle;
   Common::EventHook m_frame_end_handle;
 
-  std::optional<std::tuple<std::vector<u8>, u32, u32>> m_last_dumped_frame;
+  bool m_last_frame_duplicate;
 };
 
 extern std::unique_ptr<FrameDumper> g_frame_dumper;

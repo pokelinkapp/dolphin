@@ -23,10 +23,13 @@ namespace Events
 struct FrameAdvance
 {
 };
+// The frame data gets passed in this "inconvenient" format (including the stride), because we're basically
+// forwarding the texture as-is to avoid performance overhead from unnecessary data copies.
 struct FrameDrawn
 {
   u32 width;
   u32 height;
+  u32 stride;
   const u8* data;
 };
 struct MemoryBreakpoint
@@ -78,17 +81,13 @@ public:
 
   void EmitEvent(T evt)
   {
-    // Some events are not necessarily produced within the CPU thread,
-    // e.g. FrameDrawn originates from the FrameDumper thread.
-    // However, we cannot have concurrent Python code invocations,
-    // because Python code might invoke Dolphin code that requires
-    // a CPU thread lock, but concurrent events on the CPU thread
-    // need the Python GIL to emit their events. This can lead to
-    // deadlocks between the CPU thread guard and the GIL.
+    // To not have to think about multithreading issues in scripts, all events must come from the CPU thread.
+    // We don't want e.g. the GPU thread to call into Python, which calls into the CPU thread,
+    // breaking Dolphin threading invariants. Those cause hard-to-debug hangs and crashes.
+    // Also it might deadlock because of GIL: Python code might invoke Dolphin code that requires a CPU thread lock,
+    // but concurrent events on the CPU thread need the Python GIL to emit their events.
+    // This can lead to deadlocks between the CPU thread guard and the GIL.
     // See for example https://github.com/Felk/dolphin/issues/25#issuecomment-1736209834
-    // That's why every event must be emitted from the CPU thread,
-    // and all event sources are responsible to schedule their events
-    // into the emulation somehow.
     ASSERT_MSG(SCRIPTING, Core::IsCPUThread(),
                "Events must be emitted from the CPU thread, but {} wasn't", typeid(T).name());
 

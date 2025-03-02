@@ -223,7 +223,7 @@ void Presenter::ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_
   AfterPresentEvent::Trigger(present_info);
 }
 
-std::optional<std::tuple<u8*, u32, u32>> Presenter::ReadDumpedFrame()
+std::optional<FrameData> Presenter::ReadDumpedFrame()
 {
   return g_frame_dumper->ReadDumpedFrame();
 }

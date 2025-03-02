@@ -34,24 +34,9 @@ FrameDumper::FrameDumper()
   m_frame_end_handle =
       AfterFrameEvent::Register([this](Core::System&) { FlushFrameDump(); }, "FrameDumper");
   m_before_present_handle = BeforePresentEvent::Register(
-      [this](PresentInfo& present_info) { m_last_dumped_frame = std::nullopt; }, "FrameDumper");
-  m_after_present_handle = AfterPresentEvent::Register(
-      [this](PresentInfo& present_info) {
-        if (!API::GetEventHub().HasListeners<API::Events::FrameDrawn>())
-          return;
-        if (present_info.reason == PresentInfo::PresentReason::VideoInterfaceDuplicate)
-          return;
-        m_frame_dump_readback_texture->Flush();
-        m_frame_dump_readback_texture->Map();
-        const u8* dataRgba =
-            reinterpret_cast<u8*>(m_frame_dump_readback_texture->GetMappedPointer());
-        const u32 width = m_frame_dump_readback_texture->GetWidth();
-        const u32 height = m_frame_dump_readback_texture->GetHeight();
-        const int stride = static_cast<int>(m_frame_dump_readback_texture->GetMappedStride());
-        const std::vector<u8> data = Common::RGBAToRGB(dataRgba, width, height, stride);
-        m_last_dumped_frame = std::move(std::make_tuple(std::move(data), width, height));
-      },
-      "FrameDumper");
+      // This fires before each "field", so it's an easy way to detect duplicate frames:
+      // Just reset the frame here, and set it again each time we're actually presenting a frame.
+      [this](PresentInfo& present_info) { m_last_frame_duplicate = true; }, "FrameDumper");
 }
 
 FrameDumper::~FrameDumper()
@@ -88,16 +73,15 @@ void FrameDumper::DumpCurrentFrame(const AbstractTexture* src_texture,
   m_frame_dump_readback_texture->CopyFromTexture(src_texture, copy_rect, 0, 0,
                                                  m_frame_dump_readback_texture->GetRect());
   m_last_frame_state = m_ffmpeg_dump.FetchState(ticks, frame_number);
+  m_last_frame_duplicate = false;
   m_frame_dump_needs_flush = true;
 }
 
-std::optional<std::tuple<u8*, u32, u32>> FrameDumper::ReadDumpedFrame()
+std::optional<FrameData> FrameDumper::ReadDumpedFrame()
 {
-  if (!m_last_dumped_frame)
+  if (m_last_frame_duplicate || m_frame_dump_data.data == nullptr)
     return std::nullopt;
-  return std::make_tuple(std::get<0>(*m_last_dumped_frame).data(),
-                         std::get<1>(*m_last_dumped_frame),
-                         std::get<2>(*m_last_dumped_frame));
+  return m_frame_dump_data;
 }
 
 bool FrameDumper::CheckFrameDumpRenderTexture(u32 target_width, u32 target_height)

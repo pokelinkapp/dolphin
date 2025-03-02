@@ -6,6 +6,7 @@
 #include "Common/Flag.h"
 #include "Common/MathUtil.h"
 
+#include "VideoCommon/FrameDumpFFMpeg.h"
 #include "VideoCommon/OnScreenUIKeyMap.h"
 #include "VideoCommon/TextureCacheBase.h"
 #include "VideoCommon/TextureConfig.h"
@@ -39,7 +40,7 @@ public:
   void ViSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks);
   void ImmediateSwap(u32 xfb_addr, u32 fb_width, u32 fb_stride, u32 fb_height, u64 ticks);
   // Assumes to be called after ProcessFrameDumping (after ViSwap or ImmediateSwap)
-  std::optional<std::tuple<u8*, u32, u32>> ReadDumpedFrame();
+  std::optional<FrameData> ReadDumpedFrame();
 
   void Present();
   void ClearLastXfbId() { m_last_xfb_id = std::numeric_limits<u64>::max(); }
