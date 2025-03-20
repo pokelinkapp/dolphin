@@ -347,17 +347,6 @@ static PyObject* Reset(PyObject* module)
   Py_RETURN_NONE;
 }
 
-static PyObject* SystemReset(PyObject* self)
-{
-  auto& system = Core::System::GetInstance();
-  // Copy from DolphinQt/MainWindow.cpp: MainWindow::Reset()
-  auto& movie = system.GetMovie();
-  if (movie.IsRecordingInput())
-    movie.SetReset(true);
-  system.GetProcessorInterface().ResetButton_Tap();
-  Py_RETURN_NONE;
-}
-
 PyMODINIT_FUNC PyInit_event()
 {
   static PyMethodDef methods[] = {
@@ -368,7 +357,6 @@ PyMODINIT_FUNC PyInit_event()
       Py::MakeMethodDef<PyCodeBreakpointEvent::AddCallback>("on_codebreakpoint"),
       Py::MakeMethodDef<PyFrameDrawnEvent::AddCallback>("on_framedrawn"),
       Py::MakeMethodDef<Reset>("_dolphin_reset"),
-      Py::MakeMethodDef<SystemReset>("system_reset"),
 
       {nullptr, nullptr, 0, nullptr}  // Sentinel
   };

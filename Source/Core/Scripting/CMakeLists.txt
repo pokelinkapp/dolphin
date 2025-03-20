@@ -11,6 +11,8 @@ add_library(scripting
   Python/Modules/dolphinmodule.h
   Python/Modules/eventmodule.cpp
   Python/Modules/eventmodule.h
+  Python/Modules/emulationmodule.cpp
+  Python/Modules/emulationmodule.h
   Python/Modules/guimodule.cpp
   Python/Modules/guimodule.h
   Python/Modules/memorymodule.cpp

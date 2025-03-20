@@ -99,9 +99,3 @@ async def framedrawn() -> tuple[int, int, bytes]:
     Awaitable event that completes once a frame is drawn.
     Note that this event may negatively impact performance a bit.
     """
-
-
-def system_reset() -> None:
-    """
-    Resets the emulation.
-    """
