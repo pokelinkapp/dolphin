@@ -72,6 +72,35 @@ async def codebreakpoint() -> int:
     """
 
 
+@type_check_only
+class _FramedrawnCallback(Protocol):
+    def __call__(self, width: int, height: int, data: bytes) -> None:
+        """
+        Example callback stub for on_framedrawn.
+
+        :param width: width of the drawn frame
+        :param height: height of the drawn frame
+        :param data: bytes representing RGB pixels, of length width*height
+        """
+
+
+def on_framedrawn(callback: _FramedrawnCallback | None) -> None:
+    """
+    Registers a callback to be called every time a frame is drawn.
+    Note that this event may negatively impact performance a bit.
+
+    :param callback:
+    :return:
+    """
+
+
+async def framedrawn() -> tuple[int, int, bytes]:
+    """
+    Awaitable event that completes once a frame is drawn.
+    Note that this event may negatively impact performance a bit.
+    """
+
+
 def system_reset() -> None:
     """
     Resets the emulation.
