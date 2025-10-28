@@ -37,7 +37,7 @@
 # include <wchar.h>
 # define BUF_SIZE 64  /* assume MB_LEN_MAX <= 64 */
   /* Some systems, like BeOS, have multibyte encodings but lack mbstate_t.  */
-  extern size_t mbrtowc ();
+  //extern size_t mbrtowc ();
 # ifdef mbstate_t
 #  define mbrtowc(pwc, s, n, ps) (mbrtowc)(pwc, s, n, 0)
 #  define mbsinit(ps) 1
@@ -97,7 +97,7 @@ static void wc_to_mb_write_replacement (const char *buf, size_t buflen,
       else if (errno == E2BIG)
         /* Output buffer too small. */
         plocals->l_errno = E2BIG;
-      else 
+      else
         abort();
     } else {
       /* Successful conversion. */
