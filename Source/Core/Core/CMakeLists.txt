@@ -649,7 +649,6 @@ PUBLIC
   MbedTLS::mbedtls
   pugixml
   RangeSet::RangeSet
-  scripting
   sfml-network
   videonull
   videoogl
@@ -658,6 +657,7 @@ PUBLIC
 PRIVATE
   cubeb::cubeb
   imgui # TODO imgui shouldn't be here
+  scripting
   FatFs
   fmt::fmt
   LZO::LZO
