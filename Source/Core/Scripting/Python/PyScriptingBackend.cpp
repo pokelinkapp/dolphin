@@ -84,8 +84,8 @@ static PyThreadState* InitMainPythonInterpreter()
 static void Init(std::filesystem::path script_filepath)
 {
   if (script_filepath.is_relative())
-    script_filepath = File::GetCurrentDir() / script_filepath;
-  std::string script_filepath_str = script_filepath.string();
+    script_filepath = StringToPath(File::GetCurrentDir()) / script_filepath;
+  std::string script_filepath_str = PathToString(script_filepath);
 
   if (!std::filesystem::exists(script_filepath))
   {
@@ -95,8 +95,13 @@ static void Init(std::filesystem::path script_filepath)
 
   PyCompilerFlags flags = {PyCF_ALLOW_TOP_LEVEL_AWAIT};
   PyObject* globals = PyModule_GetDict(PyImport_AddModule("__main__"));
+#ifdef _WIN32
+  FILE* script_file = _wfopen(script_filepath.wstring().c_str(), L"rb");
+#else
+  FILE* script_file = fopen(script_filepath_str.c_str(), "rb");
+#endif
   PyObject* execution_result =
-      PyRun_FileExFlags(fopen(script_filepath_str.c_str(), "rb"), script_filepath_str.c_str(),
+      PyRun_FileExFlags(script_file, script_filepath_str.c_str(),
                         Py_file_input, globals, globals, true, &flags);
 
   if (execution_result == nullptr)
