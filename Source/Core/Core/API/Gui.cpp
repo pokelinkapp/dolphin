@@ -94,7 +94,7 @@ void Gui::DrawCircleFilled(const Vec2f center, float radius, u32 color, int num_
   GUI_DRAW_DEFERRED(AddCircleFilled(center, radius, ARGBToABGR(color), num_segments));
 }
 
-void Gui::DrawText(const Vec2f pos, u32 color, const char* text)
+void Gui::DrawGameText(const Vec2f pos, u32 color, const char* text)
 {
   std::string text_owned(text);
   m_draw_calls.emplace_back([=, text_owned = std::move(text_owned)](ImDrawList* draw_list) {
