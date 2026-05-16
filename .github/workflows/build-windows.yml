@@ -1,0 +1,79 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  build:
+    name: Windows x64 Release
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v4
+
+      - name: Configure CMake
+        run: |
+          cmake -B Build/Release `
+            -G Ninja `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_C_COMPILER=cl `
+            -DCMAKE_CXX_COMPILER=cl
+        shell: pwsh
+
+      - name: Build
+        run: cmake --build Build/Release --config Release --parallel
+        shell: pwsh
+
+      # On Windows, CMake puts the output in Binary/x64/ relative to the source root.
+      # The post-build steps in DolphinQt/CMakeLists.txt copy Sys/, Qt DLLs, and
+      # the Python embed runtime there automatically.
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Dolphin-Py3.12-x64-${{ github.sha }}
+          path: Binary/x64/
+          retention-days: 30
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Dolphin-Py3.12-x64-${{ github.sha }}
+          path: artifact/
+
+      - name: Zip artifact
+        run: |
+          cd artifact
+          zip -r ../Dolphin-Py3.12-x64.zip .
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Build ${{ github.run_number }}
+          body: Automated build from commit ${{ github.sha }}
+          files: Dolphin-Py3.12-x64.zip
+          prerelease: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

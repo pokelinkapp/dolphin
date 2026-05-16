@@ -30,6 +30,16 @@ add_library(scripting
   Python/Utils/object_wrapper.h
 )
 
+# On Windows, prefer the bundled Python from the Externals/python submodule so
+# developers don't need a separate Python install. These hints are only applied
+# when the submodule has been initialised; they can be overridden by passing
+# -DPython3_ROOT_DIR (or the individual variables) to CMake.
+if(WIN32 AND EXISTS "${CMAKE_SOURCE_DIR}/Externals/python/x64/libs/python312.lib")
+  set(Python3_ROOT_DIR    "${CMAKE_SOURCE_DIR}/Externals/python/x64" CACHE PATH     "" FORCE)
+  set(Python3_INCLUDE_DIR "${CMAKE_SOURCE_DIR}/Externals/python/x64/include"        CACHE PATH     "" FORCE)
+  set(Python3_LIBRARY     "${CMAKE_SOURCE_DIR}/Externals/python/x64/libs/python312.lib" CACHE FILEPATH "" FORCE)
+endif()
+
 find_package(Python3 REQUIRED COMPONENTS Development)
 include_directories(${Python3_INCLUDE_DIRS})
 # TODO imgui shouldn't be here

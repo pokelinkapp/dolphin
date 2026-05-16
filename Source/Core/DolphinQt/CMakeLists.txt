@@ -520,6 +520,23 @@ if(WIN32)
                                  --no-opengl-sw
                                  "$<TARGET_FILE:dolphin-emu>"
   )
+
+  # Copy Python embed runtime if the submodule is present.
+  # All files go into python-embed/ (Python's home dir at runtime).
+  # DLLs are also copied to the output root so the OS loader finds them.
+  set(_py_embed "${CMAKE_SOURCE_DIR}/Externals/python/x64/embed")
+  if(EXISTS "${_py_embed}")
+    add_custom_command(TARGET dolphin-emu POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_directory "${_py_embed}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/python-embed"
+      COMMENT "Copying Python embed runtime"
+    )
+    file(GLOB _py_dlls "${_py_embed}/*.dll")
+    foreach(_dll ${_py_dlls})
+      add_custom_command(TARGET dolphin-emu POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${_dll}" "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/"
+      )
+    endforeach()
+  endif()
 endif()
 
 # Handle localization
