@@ -15,8 +15,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
+
+      # Cache submodule working trees (Qt 6.5.1 alone is several GB).
+      # Key: sha of every submodule's pinned commit.  Changes only when
+      # a submodule reference is bumped in the parent repo.
+      - name: Compute submodule cache key
+        id: sm-key
+        shell: bash
+        run: |
+          echo "hash=$(git submodule status --recursive | sha256sum | head -c 16)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore submodule cache
+        id: sm-cache
+        uses: actions/cache@v4
+        with:
+          path: Externals
+          key: submodules-win-${{ steps.sm-key.outputs.hash }}
+
+      - name: Init submodules
+        # Always run so newly-added submodules are fetched even on partial cache hits.
+        run: git submodule update --init --recursive
+        shell: pwsh
 
       - name: Set up MSVC environment
         uses: ilammy/msvc-dev-cmd@v1
@@ -26,22 +46,28 @@ jobs:
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v4
 
+      # sccache caches compiled object files across runs. On a cache hit
+      # only changed translation units are recompiled.
+      - name: Set up sccache
+        uses: mozilla/sccache-action@v0.0.6
+        with:
+          version: v0.8.2
+
       - name: Configure CMake
         run: |
           cmake -B Build/Release `
             -G Ninja `
             -DCMAKE_BUILD_TYPE=Release `
             -DCMAKE_C_COMPILER=cl `
-            -DCMAKE_CXX_COMPILER=cl
+            -DCMAKE_CXX_COMPILER=cl `
+            -DCMAKE_C_COMPILER_LAUNCHER=sccache `
+            -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         shell: pwsh
 
       - name: Build
         run: cmake --build Build/Release --config Release --parallel
         shell: pwsh
 
-      # On Windows, CMake puts the output in Binary/x64/ relative to the source root.
-      # The post-build steps in DolphinQt/CMakeLists.txt copy Sys/, Qt DLLs, and
-      # the Python embed runtime there automatically.
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
