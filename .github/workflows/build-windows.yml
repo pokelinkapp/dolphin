@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [master]
 
+# Opt into Node.js 24 now to avoid deprecation noise when GitHub forces it
+# in June 2026.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   build:
     name: Windows x64 Release
@@ -17,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Cache submodule working trees (Qt 6.5.1 alone is several GB).
+      # Cache submodule working trees + git object stores.
       # Key: sha of every submodule's pinned commit.  Changes only when
       # a submodule reference is bumped in the parent repo.
       - name: Compute submodule cache key
@@ -65,6 +70,18 @@ jobs:
             -DCMAKE_C_COMPILER_LAUNCHER=sccache `
             -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
         shell: pwsh
+
+      # Cache the ninja build tree (.obj / .lib files) so incremental CI
+      # runs only recompile changed translation units.  Restore-keys allow
+      # a partial hit when the source hash changes so ninja still benefits
+      # from reusing unchanged objects.
+      - name: Restore build cache
+        uses: actions/cache@v4
+        with:
+          path: Build/Release
+          key: build-win-${{ hashFiles('Source/**', 'CMakeLists.txt', 'CMakeSettings.json') }}-${{ steps.sm-key.outputs.hash }}
+          restore-keys: |
+            build-win-
 
       - name: Build
         run: cmake --build Build/Release --config Release --parallel
