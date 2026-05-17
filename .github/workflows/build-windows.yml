@@ -30,7 +30,9 @@ jobs:
         id: sm-cache
         uses: actions/cache@v4
         with:
-          path: Externals
+          path: |
+            Externals
+            .git/modules
           key: submodules-win-${{ steps.sm-key.outputs.hash }}
 
       - name: Init submodules
