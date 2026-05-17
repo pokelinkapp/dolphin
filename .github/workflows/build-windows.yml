@@ -6,11 +6,6 @@ on:
   pull_request:
     branches: [master]
 
-# Opt into Node.js 24 now to avoid deprecation noise when GitHub forces it
-# in June 2026.
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   build:
     name: Windows x64 Release
