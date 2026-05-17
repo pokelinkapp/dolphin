@@ -4,6 +4,8 @@
 
 #include "ScriptsListModel.h"
 
+#include "Common/StringUtil.h"
+
 int ScriptsListModel::rowCount(const QModelIndex &parent) const
 {
   return static_cast<int>(m_scripts.size());
@@ -61,7 +63,7 @@ bool ScriptsListModel::removeRows(int position, int rows, const QModelIndex& par
 
 void ScriptsListModel::Add(std::string filename)
 {
-  m_scripts.emplace_back(Script{filename, Scripting::ScriptingBackend(filename)});
+  m_scripts.emplace_back(Script{filename, Scripting::ScriptingBackend(StringToPath(filename))});
   this->insertRow(this->rowCount());
 }
 
@@ -73,7 +75,7 @@ void ScriptsListModel::Reload(int index)
   // which is not supported when running in subinterpreter-less mode.
   m_scripts.erase(m_scripts.begin() + index);
   m_scripts.insert(m_scripts.begin() + index,
-                   Script{filename, Scripting::ScriptingBackend(filename)});
+                   Script{filename, Scripting::ScriptingBackend(StringToPath(filename))});
 }
 
 void ScriptsListModel::Remove(int index)
